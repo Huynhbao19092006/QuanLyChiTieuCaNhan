@@ -1,0 +1,8 @@
+
+venv/
+__pycache__/
+*.pyc
+.secret_key
+.env
+data/expenses.db
+.pytest_cache/
