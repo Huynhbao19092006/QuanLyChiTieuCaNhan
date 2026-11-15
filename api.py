@@ -11,10 +11,12 @@ from fastapi import (
     Security,
     Query,
 )
+
 from fastapi.security import (
     OAuth2PasswordRequestForm,
     SecurityScopes,
 )
+
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
 from sqlalchemy import text
@@ -58,7 +60,6 @@ def get_db():
         yield session
 
 
-# Tạo bảng database nếu chưa tồn tại
 @app.on_event("startup")
 def startup_event():
     create_db_and_tables()
@@ -121,12 +122,25 @@ class TransactionCreate(BaseModel):
     transaction_date: date
 
 
+# Cho phép cập nhật từng trường riêng lẻ
 class TransactionUpdate(BaseModel):
-    category_id: int
-    transaction_type: Literal["income", "expense"]
-    amount: Decimal = Field(gt=0)
-    description: str = Field(default="", max_length=500)
-    transaction_date: date
+    category_id: Optional[int] = None
+
+    transaction_type: Optional[
+        Literal["income", "expense"]
+    ] = None
+
+    amount: Optional[Decimal] = Field(
+        default=None,
+        gt=0,
+    )
+
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+    )
+
+    transaction_date: Optional[date] = None
 
 
 class TransactionRead(BaseModel):
@@ -455,13 +469,15 @@ def change_my_password(
     session.commit()
 
     return {
-        "message": "Đổi mật khẩu thành công. "
-                   "Vui lòng đăng nhập lại."
+        "message": (
+            "Đổi mật khẩu thành công. "
+            "Vui lòng đăng nhập lại."
+        )
     }
 
 
 # =====================================================
-# 13. HÀM KIỂM TRA DANH MỤC THUỘC NGƯỜI DÙNG
+# 13. KIỂM TRA DANH MỤC THUỘC NGƯỜI DÙNG
 # =====================================================
 
 def get_owned_category(
@@ -807,6 +823,7 @@ def update_transaction(
     ),
     session: Session = Depends(get_db),
 ):
+    # Tìm giao dịch thuộc tài khoản hiện tại
     transaction = session.exec(
         select(Transaction).where(
             Transaction.id == transaction_id,
@@ -820,9 +837,33 @@ def update_transaction(
             detail="Không tìm thấy giao dịch.",
         )
 
+    # Chỉ lấy những trường được gửi lên
+    updates = transaction_data.model_dump(
+        exclude_unset=True,
+        exclude_none=True,
+    )
+
+    if not updates:
+        raise HTTPException(
+            status_code=400,
+            detail="Không có thông tin cần cập nhật.",
+        )
+
+    # Lấy giá trị mới hoặc giữ nguyên giá trị cũ
+    new_category_id = updates.get(
+        "category_id",
+        transaction.category_id,
+    )
+
+    new_transaction_type = updates.get(
+        "transaction_type",
+        transaction.transaction_type,
+    )
+
+    # Kiểm tra quyền sở hữu danh mục
     category = get_owned_category(
         session,
-        transaction_data.category_id,
+        new_category_id,
         current_user.id,
     )
 
@@ -832,21 +873,33 @@ def update_transaction(
             detail="Danh mục không tồn tại hoặc không thuộc tài khoản.",
         )
 
-    if category.category_type != transaction_data.transaction_type:
+    # Kiểm tra loại giao dịch và danh mục
+    if category.category_type != new_transaction_type:
         raise HTTPException(
             status_code=400,
             detail="Loại giao dịch không khớp với danh mục.",
         )
 
-    transaction.category_id = transaction_data.category_id
-    transaction.transaction_type = transaction_data.transaction_type
-    transaction.amount = transaction_data.amount
-    transaction.description = transaction_data.description.strip()
-    transaction.transaction_date = transaction_data.transaction_date
+    # Cập nhật từng trường được gửi lên
+    for field, value in updates.items():
+        if field == "description":
+            value = value.strip()
 
-    session.add(transaction)
-    session.commit()
-    session.refresh(transaction)
+        setattr(transaction, field, value)
+
+    # Lưu dữ liệu
+    try:
+        session.add(transaction)
+        session.commit()
+        session.refresh(transaction)
+
+    except Exception:
+        session.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Có lỗi xảy ra khi cập nhật giao dịch.",
+        )
 
     return transaction_to_dict(transaction)
 
