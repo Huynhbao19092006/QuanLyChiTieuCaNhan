@@ -1,0 +1,289 @@
+
+:root {
+    --primary: #087f8c;
+    --primary-dark: #066570;
+    --background: #f5f7fb;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #d9e1ec;
+}
+
+/* ==============================
+   GIAO DIỆN CHUNG
+============================== */
+
+html,
+body,
+[class*="css"] {
+    font-family: Arial, sans-serif;
+}
+
+.stApp {
+    background: var(--background);
+    color: var(--text);
+}
+
+.block-container {
+    max-width: 1450px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+    color: #172b45 !important;
+    font-weight: 700 !important;
+}
+
+.stApp p,
+.stApp li,
+.stApp label {
+    color: var(--text);
+}
+
+[data-testid="stCaptionContainer"] {
+    color: var(--muted) !important;
+}
+
+/* ==============================
+   THANH ĐIỀU HƯỚNG
+============================== */
+
+section[data-testid="stSidebar"] {
+    background: #edf2f8;
+    border-right: 1px solid #d5deea;
+}
+
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+    color: #1e293b !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    padding: 9px 10px;
+    border-radius: 9px;
+    font-weight: 600;
+}
+
+section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+    background: #dce7f3;
+}
+
+section[data-testid="stSidebar"] .stButton button {
+    background: #ffffff;
+    color: #172b45 !important;
+    border: 1px solid #cbd5e1;
+    font-weight: 700;
+}
+
+section[data-testid="stSidebar"] .stButton button:hover {
+    background: #e1edf5;
+    border-color: #9fb4ca;
+}
+
+/* ==============================
+   THẺ THỐNG KÊ
+============================== */
+
+.metric-card {
+    background: #ffffff;
+    padding: 23px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(31, 48, 73, .06);
+    min-height: 140px;
+}
+
+.metric-icon {
+    font-size: 24px;
+    margin-bottom: 12px;
+}
+
+.metric-label {
+    color: #526174 !important;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin-bottom: 10px;
+}
+
+.metric-value {
+    color: #172b45;
+    font-size: 24px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+/* ==============================
+   BANNER TRANG TỔNG QUAN
+============================== */
+
+.dashboard-banner {
+    background: linear-gradient(120deg, #183653, #087f8c);
+    color: #ffffff;
+    padding: 28px;
+    border-radius: 18px;
+    margin-bottom: 24px;
+}
+
+.dashboard-banner h2 {
+    color: #ffffff !important;
+}
+
+.dashboard-banner p {
+    color: #f0fdfa !important;
+}
+
+/* ==============================
+   KHUNG NỘI DUNG
+============================== */
+
+.content-card {
+    background: #ffffff;
+    color: #1e293b;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 18px;
+}
+
+/* ==============================
+   NÚT BẤM
+============================== */
+
+.stButton > button,
+.stDownloadButton > button,
+.stFormSubmitButton > button {
+    border-radius: 9px;
+    font-weight: 600;
+    min-height: 42px;
+}
+
+.stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primary"] {
+    background: var(--primary);
+    color: #ffffff !important;
+    border: 1px solid var(--primary);
+}
+
+.stButton > button[kind="primary"]:hover,
+.stFormSubmitButton > button[kind="primary"]:hover {
+    background: var(--primary-dark);
+}
+
+/* ==============================
+   Ô NHẬP LIỆU
+============================== */
+
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stTextArea textarea {
+    background: #ffffff !important;
+    color: #172b45 !important;
+    border: 1px solid #b8c5d6 !important;
+    border-radius: 8px !important;
+    -webkit-text-fill-color: #172b45 !important;
+}
+
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder {
+    color: #68788c !important;
+    opacity: 1;
+}
+
+/* ==============================
+   DANH SÁCH LỰA CHỌN
+============================== */
+
+.stSelectbox div[data-baseweb="select"],
+.stMultiSelect div[data-baseweb="select"] {
+    background: #ffffff !important;
+    color: #172b45 !important;
+}
+
+div[data-baseweb="popover"],
+div[data-baseweb="menu"],
+ul[role="listbox"] {
+    background: #ffffff !important;
+}
+
+li[role="option"],
+div[role="option"] {
+    color: #1e293b !important;
+}
+
+/* ==============================
+   BẢNG DỮ LIỆU
+============================== */
+
+div[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* ==============================
+   TAB
+============================== */
+
+.stTabs [data-baseweb="tab"] {
+    color: #334155 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #087f8c !important;
+}
+
+/* ==============================
+   METRIC VÀ THÔNG BÁO
+============================== */
+
+[data-testid="stMetricLabel"] {
+    color: #526174 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #172b45 !important;
+}
+
+[data-testid="stAlert"] {
+    border-radius: 9px;
+}
+
+/* ==============================
+   ĐƯỜNG PHÂN CÁCH
+============================== */
+
+hr {
+    border-color: #d9e1ec;
+}
+
+/* ==============================
+   BIỂU ĐỒ THỐNG KÊ
+============================== */
+
+div[data-testid="stVegaLiteChart"] {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 18px;
+}
+
+/* ==============================
+   ẨN THÀNH PHẦN MẶC ĐỊNH
+============================== */
+
+#MainMenu,
+footer {
+    visibility: hidden;
+}

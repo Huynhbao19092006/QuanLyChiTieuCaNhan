@@ -6,13 +6,16 @@ python-multipart
 email-validator
 
 sqlmodel
+sqlalchemy
+psycopg[binary]
+python-dotenv
+
 pandas
 numpy
 matplotlib
 
 pyjwt
 passlib[argon2]
-pwdlib[argon2]
 
 openpyxl
 python-docx

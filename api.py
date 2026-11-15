@@ -1,7 +1,7 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import (
     FastAPI,
@@ -9,6 +9,7 @@ from fastapi import (
     HTTPException,
     status,
     Security,
+    Query,
 )
 from fastapi.security import (
     OAuth2PasswordRequestForm,
@@ -16,6 +17,7 @@ from fastapi.security import (
 )
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 
 from database import engine, create_db_and_tables
 from models import User, Category, Transaction
@@ -23,6 +25,7 @@ from models import User, Category, Transaction
 from auth import (
     oauth2_scheme,
     verify_password,
+    hash_password,
     create_access_token,
     decode_access_token,
 )
@@ -41,9 +44,10 @@ app = FastAPI(
         "API quản lý chi tiêu cá nhân, "
         "JWT Authentication và OAuth2 Scopes."
     ),
-    version="2.0.0",
+    version="3.0.0",
 )
 
+# Tạo bảng database nếu chưa tồn tại
 create_db_and_tables()
 
 
@@ -63,13 +67,22 @@ def get_db():
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class UserRead(BaseModel):
     id: int
     username: str
     email: EmailStr
+
+
+class UserUpdate(BaseModel):
+    email: EmailStr
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class Token(BaseModel):
@@ -100,7 +113,7 @@ class TransactionCreate(BaseModel):
     category_id: int
     transaction_type: Literal["income", "expense"]
     amount: Decimal = Field(gt=0)
-    description: str = ""
+    description: str = Field(default="", max_length=500)
     transaction_date: date
 
 
@@ -108,7 +121,7 @@ class TransactionUpdate(BaseModel):
     category_id: int
     transaction_type: Literal["income", "expense"]
     amount: Decimal = Field(gt=0)
-    description: str = ""
+    description: str = Field(default="", max_length=500)
     transaction_date: date
 
 
@@ -122,19 +135,44 @@ class TransactionRead(BaseModel):
 
 
 # =====================================================
-# 6. ĐĂNG KÝ TÀI KHOẢN
+# 6. HÀM CHUẨN HÓA DỮ LIỆU
+# =====================================================
+
+def transaction_to_dict(transaction: Transaction):
+    return {
+        "id": transaction.id,
+        "transaction_type": transaction.transaction_type,
+        "amount": transaction.amount,
+        "description": transaction.description or "",
+        "transaction_date": transaction.transaction_date,
+        "category_id": transaction.category_id,
+    }
+
+
+def category_to_dict(category: Category):
+    return {
+        "id": category.id,
+        "name": category.name,
+        "category_type": category.category_type,
+    }
+
+
+# =====================================================
+# 7. ĐĂNG KÝ TÀI KHOẢN
 # =====================================================
 
 @app.post(
     "/users/",
     response_model=UserRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_201_CREATED,
+    tags=["user"],
 )
 def create_user(
     user_data: UserCreate,
     session: Session = Depends(get_db),
 ):
     username = user_data.username.strip()
+    email = str(user_data.email).strip().lower()
 
     if not username:
         raise HTTPException(
@@ -142,49 +180,62 @@ def create_user(
             detail="Tên đăng nhập không được để trống.",
         )
 
-    success, result = register_user(
-        session,
-        username,
-        user_data.email,
-        user_data.password,
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=400,
-            detail=result,
+    try:
+        success, result = register_user(
+            session,
+            username,
+            email,
+            user_data.password,
         )
 
-    user = session.exec(
-        select(User).where(User.username == username)
-    ).first()
+        if not success:
+            raise HTTPException(
+                status_code=409,
+                detail=result,
+            )
 
-    if user is None:
+        user = session.exec(
+            select(User).where(User.username == username)
+        ).first()
+
+        if user is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Không thể tạo tài khoản.",
+            )
+
+        return {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+        }
+
+    except IntegrityError:
+        session.rollback()
+
         raise HTTPException(
-            status_code=500,
-            detail="Không thể tạo tài khoản.",
+            status_code=409,
+            detail="Tên đăng nhập hoặc email đã được sử dụng.",
         )
-
-    return {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-    }
 
 
 # =====================================================
-# 7. ĐĂNG NHẬP - JWT
+# 8. ĐĂNG NHẬP - JWT
 # =====================================================
 
-@app.post("/token", response_model=Token)
+@app.post(
+    "/token",
+    response_model=Token,
+    tags=["authentication"],
+)
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_db),
 ):
+    username = form_data.username.strip()
+
     user = session.exec(
-        select(User).where(
-            User.username == form_data.username.strip()
-        )
+        select(User).where(User.username == username)
     ).first()
 
     if (
@@ -229,7 +280,7 @@ def login_for_access_token(
 
 
 # =====================================================
-# 8. XÁC THỰC JWT VÀ OAUTH2 SCOPES
+# 9. XÁC THỰC JWT VÀ OAUTH2 SCOPES
 # =====================================================
 
 def get_current_user(
@@ -258,7 +309,11 @@ def get_current_user(
     username = payload.get("sub")
     scopes = payload.get("scopes", [])
 
-    if not username or not isinstance(scopes, list):
+    if (
+        not username
+        or not isinstance(scopes, list)
+        or not all(isinstance(scope, str) for scope in scopes)
+    ):
         raise credentials_exception
 
     user = session.exec(
@@ -279,12 +334,13 @@ def get_current_user(
 
 
 # =====================================================
-# 9. LẤY THÔNG TIN NGƯỜI DÙNG
+# 10. LẤY THÔNG TIN TÀI KHOẢN
 # =====================================================
 
 @app.get(
     "/users/me",
     response_model=UserRead,
+    tags=["user"],
 )
 def read_users_me(
     current_user: User = Security(
@@ -300,7 +356,108 @@ def read_users_me(
 
 
 # =====================================================
-# 10. HÀM KIỂM TRA DANH MỤC THUỘC NGƯỜI DÙNG
+# 11. CẬP NHẬT EMAIL TÀI KHOẢN
+# =====================================================
+
+@app.put(
+    "/users/me",
+    response_model=UserRead,
+    tags=["user"],
+)
+def update_my_profile(
+    user_data: UserUpdate,
+    current_user: User = Security(
+        get_current_user,
+        scopes=["me"],
+    ),
+    session: Session = Depends(get_db),
+):
+    new_email = str(user_data.email).strip().lower()
+
+    existing_user = session.exec(
+        select(User).where(
+            User.email == new_email,
+            User.id != current_user.id,
+        )
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=409,
+            detail="Email đã được sử dụng bởi tài khoản khác.",
+        )
+
+    current_user.email = new_email
+
+    try:
+        session.add(current_user)
+        session.commit()
+        session.refresh(current_user)
+
+    except IntegrityError:
+        session.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Email đã tồn tại.",
+        )
+
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+    }
+
+
+# =====================================================
+# 12. ĐỔI MẬT KHẨU
+# =====================================================
+
+@app.post(
+    "/users/me/change-password",
+    tags=["user"],
+)
+def change_my_password(
+    payload: PasswordChange,
+    current_user: User = Security(
+        get_current_user,
+        scopes=["me"],
+    ),
+    session: Session = Depends(get_db),
+):
+    if not verify_password(
+        payload.current_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Mật khẩu hiện tại không chính xác.",
+        )
+
+    if verify_password(
+        payload.new_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Mật khẩu mới phải khác mật khẩu hiện tại.",
+        )
+
+    current_user.password_hash = hash_password(
+        payload.new_password
+    )
+
+    session.add(current_user)
+    session.commit()
+
+    return {
+        "message": "Đổi mật khẩu thành công. "
+                   "Vui lòng đăng nhập lại."
+    }
+
+
+# =====================================================
+# 13. HÀM KIỂM TRA DANH MỤC THUỘC NGƯỜI DÙNG
 # =====================================================
 
 def get_owned_category(
@@ -308,23 +465,22 @@ def get_owned_category(
     category_id: int,
     user_id: int,
 ):
-    category = session.exec(
+    return session.exec(
         select(Category).where(
             Category.id == category_id,
             Category.user_id == user_id,
         )
     ).first()
 
-    return category
-
 
 # =====================================================
-# 11. LẤY DANH SÁCH DANH MỤC
+# 14. LẤY DANH SÁCH DANH MỤC
 # =====================================================
 
 @app.get(
     "/categories",
     response_model=list[CategoryRead],
+    tags=["categories"],
 )
 def read_categories(
     current_user: User = Security(
@@ -340,23 +496,20 @@ def read_categories(
     ).all()
 
     return [
-        {
-            "id": item.id,
-            "name": item.name,
-            "category_type": item.category_type,
-        }
+        category_to_dict(item)
         for item in categories
     ]
 
 
 # =====================================================
-# 12. THÊM DANH MỤC
+# 15. THÊM DANH MỤC
 # =====================================================
 
 @app.post(
     "/categories",
     response_model=CategoryRead,
     status_code=status.HTTP_201_CREATED,
+    tags=["categories"],
 )
 def create_category(
     category_data: CategoryCreate,
@@ -384,7 +537,7 @@ def create_category(
 
     if existing:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail="Danh mục này đã tồn tại.",
         )
 
@@ -398,18 +551,80 @@ def create_category(
     session.commit()
     session.refresh(category)
 
-    return {
-        "id": category.id,
-        "name": category.name,
-        "category_type": category.category_type,
-    }
+    return category_to_dict(category)
 
 
 # =====================================================
-# 13. XÓA DANH MỤC
+# 16. SỬA DANH MỤC
 # =====================================================
 
-@app.delete("/categories/{category_id}")
+@app.put(
+    "/categories/{category_id}",
+    response_model=CategoryRead,
+    tags=["categories"],
+)
+def update_category(
+    category_id: int,
+    category_data: CategoryCreate,
+    current_user: User = Security(
+        get_current_user,
+        scopes=["categories"],
+    ),
+    session: Session = Depends(get_db),
+):
+    category = get_owned_category(
+        session,
+        category_id,
+        current_user.id,
+    )
+
+    if category is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Không tìm thấy danh mục.",
+        )
+
+    name = category_data.name.strip()
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Tên danh mục không được để trống.",
+        )
+
+    existing = session.exec(
+        select(Category).where(
+            Category.user_id == current_user.id,
+            Category.name == name,
+            Category.category_type == category_data.category_type,
+            Category.id != category_id,
+        )
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="Danh mục này đã tồn tại.",
+        )
+
+    category.name = name
+    category.category_type = category_data.category_type
+
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+
+    return category_to_dict(category)
+
+
+# =====================================================
+# 17. XÓA DANH MỤC
+# =====================================================
+
+@app.delete(
+    "/categories/{category_id}",
+    tags=["categories"],
+)
 def delete_category(
     category_id: int,
     current_user: User = Security(
@@ -455,12 +670,13 @@ def delete_category(
 
 
 # =====================================================
-# 14. LẤY DANH SÁCH GIAO DỊCH
+# 18. LẤY DANH SÁCH GIAO DỊCH
 # =====================================================
 
 @app.get(
     "/transactions",
     response_model=list[TransactionRead],
+    tags=["transactions"],
 )
 def read_transactions(
     current_user: User = Security(
@@ -468,34 +684,64 @@ def read_transactions(
         scopes=["transactions"],
     ),
     session: Session = Depends(get_db),
+    date_from: Optional[date] = Query(
+        default=None,
+        description="Ngày bắt đầu",
+    ),
+    date_to: Optional[date] = Query(
+        default=None,
+        description="Ngày kết thúc",
+    ),
+    transaction_type: Optional[
+        Literal["income", "expense"]
+    ] = Query(default=None),
 ):
-    transactions = session.exec(
-        select(Transaction)
-        .where(Transaction.user_id == current_user.id)
-        .order_by(Transaction.transaction_date.desc())
-    ).all()
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Ngày bắt đầu không được lớn hơn ngày kết thúc.",
+        )
+
+    statement = select(Transaction).where(
+        Transaction.user_id == current_user.id
+    )
+
+    if date_from:
+        statement = statement.where(
+            Transaction.transaction_date >= date_from
+        )
+
+    if date_to:
+        statement = statement.where(
+            Transaction.transaction_date <= date_to
+        )
+
+    if transaction_type:
+        statement = statement.where(
+            Transaction.transaction_type == transaction_type
+        )
+
+    statement = statement.order_by(
+        Transaction.transaction_date.desc()
+    )
+
+    transactions = session.exec(statement).all()
 
     return [
-        {
-            "id": item.id,
-            "transaction_type": item.transaction_type,
-            "amount": item.amount,
-            "description": item.description or "",
-            "transaction_date": item.transaction_date,
-            "category_id": item.category_id,
-        }
+        transaction_to_dict(item)
         for item in transactions
     ]
 
 
 # =====================================================
-# 15. THÊM GIAO DỊCH
+# 19. THÊM GIAO DỊCH
 # =====================================================
 
 @app.post(
     "/transactions",
     response_model=TransactionRead,
     status_code=status.HTTP_201_CREATED,
+    tags=["transactions"],
 )
 def create_transaction(
     transaction_data: TransactionCreate,
@@ -536,23 +782,17 @@ def create_transaction(
     session.commit()
     session.refresh(transaction)
 
-    return {
-        "id": transaction.id,
-        "transaction_type": transaction.transaction_type,
-        "amount": transaction.amount,
-        "description": transaction.description or "",
-        "transaction_date": transaction.transaction_date,
-        "category_id": transaction.category_id,
-    }
+    return transaction_to_dict(transaction)
 
 
 # =====================================================
-# 16. SỬA GIAO DỊCH
+# 20. SỬA GIAO DỊCH
 # =====================================================
 
 @app.put(
     "/transactions/{transaction_id}",
     response_model=TransactionRead,
+    tags=["transactions"],
 )
 def update_transaction(
     transaction_id: int,
@@ -604,21 +844,17 @@ def update_transaction(
     session.commit()
     session.refresh(transaction)
 
-    return {
-        "id": transaction.id,
-        "transaction_type": transaction.transaction_type,
-        "amount": transaction.amount,
-        "description": transaction.description or "",
-        "transaction_date": transaction.transaction_date,
-        "category_id": transaction.category_id,
-    }
+    return transaction_to_dict(transaction)
 
 
 # =====================================================
-# 17. XÓA GIAO DỊCH
+# 21. XÓA GIAO DỊCH
 # =====================================================
 
-@app.delete("/transactions/{transaction_id}")
+@app.delete(
+    "/transactions/{transaction_id}",
+    tags=["transactions"],
+)
 def delete_transaction(
     transaction_id: int,
     current_user: User = Security(
@@ -649,13 +885,88 @@ def delete_transaction(
 
 
 # =====================================================
-# 18. KIỂM TRA API
+# 22. THỐNG KÊ THU CHI
 # =====================================================
 
-@app.get("/")
+@app.get(
+    "/statistics",
+    tags=["statistics"],
+)
+def get_statistics(
+    current_user: User = Security(
+        get_current_user,
+        scopes=["transactions"],
+    ),
+    session: Session = Depends(get_db),
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Ngày bắt đầu không được lớn hơn ngày kết thúc.",
+        )
+
+    statement = select(Transaction).where(
+        Transaction.user_id == current_user.id
+    )
+
+    if date_from:
+        statement = statement.where(
+            Transaction.transaction_date >= date_from
+        )
+
+    if date_to:
+        statement = statement.where(
+            Transaction.transaction_date <= date_to
+        )
+
+    transactions = session.exec(statement).all()
+
+    total_income = Decimal("0")
+    total_expense = Decimal("0")
+
+    for item in transactions:
+        if item.transaction_type == "income":
+            total_income += item.amount
+
+        elif item.transaction_type == "expense":
+            total_expense += item.amount
+
+    balance = total_income - total_expense
+
+    return {
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "balance": balance,
+        "transaction_count": len(transactions),
+        "income_count": sum(
+            1 for item in transactions
+            if item.transaction_type == "income"
+        ),
+        "expense_count": sum(
+            1 for item in transactions
+            if item.transaction_type == "expense"
+        ),
+    }
+
+
+# =====================================================
+# 23. KIỂM TRA API
+# =====================================================
+
+@app.get("/", tags=["system"])
 def home():
     return {
         "message": "Personal Expense Management API",
         "status": "running",
-        "version": "2.0.0",
+        "version": "3.0.0",
+    }
+
+
+@app.get("/health", tags=["system"])
+def health_check():
+    return {
+        "status": "healthy",
+        "database": "configured",
     }

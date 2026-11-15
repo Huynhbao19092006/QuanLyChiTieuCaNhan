@@ -1,10 +1,12 @@
 
 import html
+from pathlib import Path
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO, StringIO
 from types import SimpleNamespace
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -24,7 +26,7 @@ from api_client import (
 
 
 # =========================================================
-# 1. CẤU HÌNH GIAO DIỆN
+# 1. CẤU HÌNH GIAO DIỆN VÀ CSS
 # =========================================================
 
 st.set_page_config(
@@ -34,230 +36,27 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
-    <style>
-    :root {
-        --primary: #087f8c;
-        --primary-dark: #066570;
-        --background: #f5f7fb;
-        --text: #1e293b;
-        --muted: #64748b;
-        --border: #d9e1ec;
-    }
+BASE_DIR = Path(__file__).resolve().parent
+CSS_PATH = BASE_DIR / "styles" / "style.css"
 
-    html, body, [class*="css"] {
-        font-family: Arial, sans-serif;
-    }
 
-    .stApp {
-        background: var(--background);
-        color: var(--text);
-    }
+def load_css():
+    """Đọc CSS từ file riêng và áp dụng vào Streamlit."""
+    if not CSS_PATH.exists():
+        st.warning("Không tìm thấy file styles/style.css")
+        return
 
-    .block-container {
-        max-width: 1450px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }
+    try:
+        css = CSS_PATH.read_text(encoding="utf-8")
+        st.markdown(
+            f"<style>{css}</style>",
+            unsafe_allow_html=True,
+        )
+    except OSError as error:
+        st.error(f"Không thể đọc file CSS: {error}")
 
-    h1, h2, h3, h4, h5 {
-        color: #172b45 !important;
-        font-weight: 700 !important;
-    }
 
-    .stApp p,
-    .stApp li,
-    .stApp label {
-        color: var(--text);
-    }
-
-    [data-testid="stCaptionContainer"] {
-        color: var(--muted) !important;
-    }
-
-    section[data-testid="stSidebar"] {
-        background: #edf2f8;
-        border-right: 1px solid #d5deea;
-    }
-
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        color: #1e293b !important;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
-        padding: 9px 10px;
-        border-radius: 9px;
-        font-weight: 600;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-        background: #dce7f3;
-    }
-
-    section[data-testid="stSidebar"] .stButton button {
-        background: #ffffff;
-        color: #172b45 !important;
-        border: 1px solid #cbd5e1;
-        font-weight: 700;
-    }
-
-    section[data-testid="stSidebar"] .stButton button:hover {
-        background: #e1edf5;
-        border-color: #9fb4ca;
-    }
-
-    .metric-card {
-        background: #ffffff;
-        padding: 23px;
-        border-radius: 16px;
-        border: 1px solid var(--border);
-        box-shadow: 0 4px 14px rgba(31,48,73,.06);
-        min-height: 140px;
-    }
-
-    .metric-icon {
-        font-size: 24px;
-        margin-bottom: 12px;
-    }
-
-    .metric-label {
-        color: #526174 !important;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: .5px;
-        margin-bottom: 10px;
-    }
-
-    .metric-value {
-        color: #172b45;
-        font-size: 24px;
-        font-weight: 800;
-        overflow-wrap: anywhere;
-    }
-
-    .dashboard-banner {
-        background: linear-gradient(120deg, #183653, #087f8c);
-        color: #ffffff;
-        padding: 28px;
-        border-radius: 18px;
-        margin-bottom: 24px;
-    }
-
-    .dashboard-banner h2 {
-        color: #ffffff !important;
-    }
-
-    .dashboard-banner p {
-        color: #f0fdfa !important;
-    }
-
-    .content-card {
-        background: #ffffff;
-        color: #1e293b;
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 20px;
-        margin-bottom: 18px;
-    }
-
-    .stButton > button,
-    .stDownloadButton > button,
-    .stFormSubmitButton > button {
-        border-radius: 9px;
-        font-weight: 600;
-        min-height: 42px;
-    }
-
-    .stButton > button[kind="primary"],
-    .stFormSubmitButton > button[kind="primary"] {
-        background: var(--primary);
-        color: #ffffff !important;
-        border: 1px solid var(--primary);
-    }
-
-    .stButton > button[kind="primary"]:hover,
-    .stFormSubmitButton > button[kind="primary"]:hover {
-        background: var(--primary-dark);
-    }
-
-    .stTextInput input,
-    .stNumberInput input,
-    .stDateInput input,
-    .stTextArea textarea {
-        background: #ffffff !important;
-        color: #172b45 !important;
-        border: 1px solid #b8c5d6 !important;
-        border-radius: 8px !important;
-        -webkit-text-fill-color: #172b45 !important;
-    }
-
-    .stTextInput input::placeholder,
-    .stTextArea textarea::placeholder {
-        color: #68788c !important;
-        opacity: 1;
-    }
-
-    .stSelectbox div[data-baseweb="select"],
-    .stMultiSelect div[data-baseweb="select"] {
-        background: #ffffff !important;
-        color: #172b45 !important;
-    }
-
-    div[data-baseweb="popover"],
-    div[data-baseweb="menu"],
-    ul[role="listbox"] {
-        background: #ffffff !important;
-    }
-
-    li[role="option"],
-    div[role="option"] {
-        color: #1e293b !important;
-    }
-
-    div[data-testid="stDataFrame"] {
-        border-radius: 10px;
-        overflow: hidden;
-        border: 1px solid var(--border);
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        color: #334155 !important;
-    }
-
-    .stTabs [aria-selected="true"] {
-        color: #087f8c !important;
-    }
-
-    [data-testid="stMetricLabel"] {
-        color: #526174 !important;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #172b45 !important;
-    }
-
-    [data-testid="stAlert"] {
-        border-radius: 9px;
-    }
-
-    hr {
-        border-color: #d9e1ec;
-    }
-
-    #MainMenu, footer {
-        visibility: hidden;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+load_css()
 
 
 # =========================================================
@@ -286,11 +85,12 @@ if st.session_state.access_token and not st.session_state.user:
             api_logout()
             st.session_state.user = None
             st.session_state.logged_in = False
-
+            st.session_state.access_token = None
     except Exception:
         api_logout()
         st.session_state.user = None
         st.session_state.logged_in = False
+        st.session_state.access_token = None
 
 
 # =========================================================
@@ -299,17 +99,14 @@ if st.session_state.access_token and not st.session_state.user:
 
 def format_money(value):
     """Định dạng tiền Việt Nam."""
-
     try:
         return f"{float(value):,.0f} đ"
-
     except (ValueError, TypeError, InvalidOperation):
         return "0 đ"
 
 
 def get_user_value(field):
     """Lấy thông tin người dùng."""
-
     user = st.session_state.get("user")
 
     if user is None:
@@ -327,6 +124,8 @@ def get_user_id():
 
 def parse_api_date(value):
     """Chuyển ngày từ API thành datetime.date."""
+    if isinstance(value, datetime):
+        return value.date()
 
     if isinstance(value, date):
         return value
@@ -337,14 +136,12 @@ def parse_api_date(value):
         return datetime.fromisoformat(
             value.replace("Z", "+00:00")
         ).date()
-
     except ValueError:
         return date.fromisoformat(value[:10])
 
 
 def convert_category(item):
     """Chuyển dữ liệu danh mục API thành object."""
-
     return SimpleNamespace(
         id=int(item["id"]),
         name=str(item["name"]),
@@ -354,22 +151,18 @@ def convert_category(item):
 
 def convert_transaction(item):
     """Chuyển dữ liệu giao dịch API thành object."""
-
     return SimpleNamespace(
         id=int(item["id"]),
         category_id=int(item["category_id"]),
         transaction_type=str(item["transaction_type"]),
         amount=Decimal(str(item["amount"])),
         description=item.get("description") or "",
-        transaction_date=parse_api_date(
-            item["transaction_date"]
-        ),
+        transaction_date=parse_api_date(item["transaction_date"]),
     )
 
 
 def get_api_error(result):
     """Lấy thông báo lỗi từ API."""
-
     if isinstance(result, dict):
         return result.get("detail", str(result))
 
@@ -381,7 +174,6 @@ def load_data():
     Lấy giao dịch và danh mục thông qua FastAPI.
     Không truy cập SQLite trực tiếp từ Streamlit.
     """
-
     if not st.session_state.get("access_token"):
         return [], []
 
@@ -400,12 +192,10 @@ def load_data():
             convert_transaction(item)
             for item in raw_transactions
         ]
-
         categories = [
             convert_category(item)
             for item in raw_categories
         ]
-
         return transactions, categories
 
     except (KeyError, TypeError, ValueError, InvalidOperation) as error:
@@ -415,7 +205,6 @@ def load_data():
 
 def category_name(category_id, categories):
     """Tìm tên danh mục theo ID."""
-
     for category in categories:
         if category.id == category_id:
             return category.name
@@ -425,7 +214,6 @@ def category_name(category_id, categories):
 
 def get_category_options(categories, transaction_type=None):
     """Lọc danh mục theo loại giao dịch."""
-
     if transaction_type is None:
         return categories
 
@@ -438,7 +226,6 @@ def get_category_options(categories, transaction_type=None):
 
 def transaction_dataframe(transactions, categories):
     """Chuyển giao dịch thành DataFrame."""
-
     rows = []
 
     for item in transactions:
@@ -449,32 +236,21 @@ def transaction_dataframe(transactions, categories):
                 if item.transaction_type == "income"
                 else "Chi tiêu"
             ),
-            "Danh mục": category_name(
-                item.category_id,
-                categories
-            ),
+            "Danh mục": category_name(item.category_id, categories),
             "Số tiền": float(item.amount),
             "Mô tả": item.description or "",
         })
 
     return pd.DataFrame(
         rows,
-        columns=[
-            "Ngày",
-            "Loại",
-            "Danh mục",
-            "Số tiền",
-            "Mô tả",
-        ],
+        columns=["Ngày", "Loại", "Danh mục", "Số tiền", "Mô tả"],
     )
 
 
 def parse_amount(value):
     """Kiểm tra số tiền hợp lệ."""
-
     try:
         amount = Decimal(str(value).strip())
-
     except (InvalidOperation, ValueError):
         raise ValueError("Số tiền không hợp lệ.")
 
@@ -498,7 +274,6 @@ def show_page_title(title, description):
 # =========================================================
 
 def show_auth_page():
-
     st.markdown(
         """
         <div style="
@@ -522,7 +297,6 @@ def show_auth_page():
     left, center, right = st.columns([1, 1.5, 1])
 
     with center:
-
         st.markdown(
             '<div class="content-card">',
             unsafe_allow_html=True,
@@ -533,23 +307,15 @@ def show_auth_page():
             "Đăng ký",
         ])
 
-        # -----------------------------
-        # ĐĂNG NHẬP
-        # -----------------------------
-
         with tab_login:
-
             st.subheader("Chào mừng trở lại")
-            st.caption(
-                "Đăng nhập để tiếp tục quản lý tài chính."
-            )
+            st.caption("Đăng nhập để tiếp tục quản lý tài chính.")
 
             username = st.text_input(
                 "Tên đăng nhập",
                 key="login_username",
                 placeholder="Nhập tên đăng nhập",
             )
-
             password = st.text_input(
                 "Mật khẩu",
                 type="password",
@@ -560,90 +326,62 @@ def show_auth_page():
             if st.button(
                 "Đăng nhập",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             ):
-
                 if not username.strip() or not password:
                     st.warning(
                         "Vui lòng nhập tên đăng nhập và mật khẩu."
                     )
-
                 else:
-
                     try:
                         api_logout()
-
                         success, message = api_login(
                             username.strip(),
                             password,
                         )
 
                         if success:
-
                             current_user = get_current_user()
 
                             if current_user:
-
                                 st.session_state.user = current_user
                                 st.session_state.logged_in = True
-
-                                st.success(
-                                    "Đăng nhập thành công."
-                                )
-
+                                st.success("Đăng nhập thành công.")
                                 st.rerun()
-
                             else:
-
                                 api_logout()
-
                                 st.session_state.user = None
                                 st.session_state.logged_in = False
-
                                 st.error(
                                     "Không lấy được thông tin người dùng. "
                                     "Vui lòng thử lại."
                                 )
-
                         else:
                             st.error(get_api_error(message))
 
                     except Exception as error:
-                        st.error(
-                            f"Không thể đăng nhập: {error}"
-                        )
-
-        # -----------------------------
-        # ĐĂNG KÝ
-        # -----------------------------
+                        st.error(f"Không thể đăng nhập: {error}")
 
         with tab_register:
-
             st.subheader("Tạo tài khoản mới")
-
-            st.caption(
-                "Đăng ký để bắt đầu sử dụng hệ thống."
-            )
+            st.caption("Đăng ký để bắt đầu sử dụng hệ thống.")
 
             new_username = st.text_input(
                 "Tên đăng nhập",
                 key="register_username",
                 placeholder="Nhập tên đăng nhập",
             )
-
             new_email = st.text_input(
                 "Email",
                 key="register_email",
                 placeholder="Nhập email",
             )
-
             new_password = st.text_input(
                 "Mật khẩu",
                 type="password",
                 key="register_password",
                 placeholder="Tạo mật khẩu",
             )
-
             confirm_password = st.text_input(
                 "Xác nhận mật khẩu",
                 type="password",
@@ -654,33 +392,21 @@ def show_auth_page():
             if st.button(
                 "Tạo tài khoản",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             ):
-
                 if not new_username.strip():
                     st.error("Vui lòng nhập tên đăng nhập.")
-
                 elif not new_email.strip():
                     st.error("Vui lòng nhập email.")
-
                 elif "@" not in new_email or "." not in new_email:
                     st.error("Email không đúng định dạng.")
-
                 elif not new_password:
                     st.error("Vui lòng nhập mật khẩu.")
-
                 elif len(new_password) < 8:
-                    st.error(
-                        "Mật khẩu nên có ít nhất 8 ký tự."
-                    )
-
+                    st.error("Mật khẩu nên có ít nhất 8 ký tự.")
                 elif new_password != confirm_password:
-                    st.error(
-                        "Mật khẩu xác nhận không khớp."
-                    )
-
+                    st.error("Mật khẩu xác nhận không khớp.")
                 else:
-
                     try:
                         success, result = api_register(
                             new_username.strip(),
@@ -689,34 +415,25 @@ def show_auth_page():
                         )
 
                         if success:
-                            st.success(
-                                "Đăng ký tài khoản thành công."
-                            )
-
+                            st.success("Đăng ký tài khoản thành công.")
                             st.info(
                                 "Bạn có thể chuyển sang tab Đăng nhập."
                             )
-
                         else:
                             st.error(get_api_error(result))
 
                     except Exception as error:
-                        st.error(
-                            f"Không thể đăng ký: {error}"
-                        )
+                        st.error(f"Không thể đăng ký: {error}")
 
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================================================
+
 # 5. TRANG TỔNG QUAN
 # =========================================================
 
 def show_dashboard():
-
     transactions, categories = load_data()
 
     show_page_title(
@@ -745,13 +462,11 @@ def show_dashboard():
         for item in transactions
         if item.transaction_type == "income"
     )
-
     total_expense = sum(
         float(item.amount)
         for item in transactions
         if item.transaction_type == "expense"
     )
-
     balance = total_income - total_expense
 
     col1, col2, col3 = st.columns(3)
@@ -785,20 +500,13 @@ def show_dashboard():
         )
 
     with col3:
-
-        balance_color = (
-            "#15966b"
-            if balance >= 0
-            else "#df6868"
-        )
-
+        balance_color = "#15966b" if balance >= 0 else "#df6868"
         st.markdown(
             f"""
             <div class="metric-card">
                 <div class="metric-icon">📊</div>
                 <div class="metric-label">SỐ DƯ HIỆN TẠI</div>
-                <div class="metric-value"
-                     style="color:{balance_color};">
+                <div class="metric-value" style="color:{balance_color};">
                     {format_money(balance)}
                 </div>
             </div>
@@ -807,40 +515,22 @@ def show_dashboard():
         )
 
     st.write("")
-
     left, right = st.columns([1.5, 1])
 
     with left:
-
         st.markdown(
             '<div class="content-card">',
             unsafe_allow_html=True,
         )
-
         st.subheader("Biến động thu và chi")
 
         if transactions:
-
-            df = transaction_dataframe(
-                transactions,
-                categories,
-            )
-
-            df["Ngày"] = pd.to_datetime(
-                df["Ngày"],
-                errors="coerce",
-            )
-
+            df = transaction_dataframe(transactions, categories)
+            df["Ngày"] = pd.to_datetime(df["Ngày"], errors="coerce")
             df = df.dropna(subset=["Ngày"])
 
             if not df.empty:
-
-                df["Tháng"] = (
-                    df["Ngày"]
-                    .dt.to_period("M")
-                    .astype(str)
-                )
-
+                df["Tháng"] = df["Ngày"].dt.to_period("M").astype(str)
                 monthly = df.pivot_table(
                     index="Tháng",
                     columns="Loại",
@@ -848,66 +538,41 @@ def show_dashboard():
                     aggfunc="sum",
                     fill_value=0,
                 )
-
                 st.bar_chart(monthly)
-
             else:
-                st.info(
-                    "Không có dữ liệu ngày hợp lệ."
-                )
-
+                st.info("Không có dữ liệu ngày hợp lệ.")
         else:
-            st.info(
-                "Chưa có dữ liệu giao dịch để hiển thị."
-            )
+            st.info("Chưa có dữ liệu giao dịch để hiển thị.")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
-
         st.markdown(
             '<div class="content-card">',
             unsafe_allow_html=True,
         )
-
         st.subheader("Tình hình chi tiêu")
 
-        if total_income > 0:
-            expense_ratio = (
-                total_expense / total_income * 100
-            )
-        else:
-            expense_ratio = 0
+        expense_ratio = (
+            total_expense / total_income * 100
+            if total_income > 0
+            else 0
+        )
 
         st.metric(
             "Tỷ lệ chi tiêu trên thu nhập",
             f"{expense_ratio:.1f}%",
         )
-
-        st.progress(
-            min(max(expense_ratio / 100, 0), 1)
-        )
+        st.progress(min(max(expense_ratio / 100, 0), 1))
 
         if total_income == 0 and total_expense == 0:
-            st.info(
-                "Hãy thêm giao dịch để xem phân tích."
-            )
-
+            st.info("Hãy thêm giao dịch để xem phân tích.")
         elif total_income == 0:
-            st.warning(
-                "Bạn chưa có thu nhập được ghi nhận."
-            )
-
+            st.warning("Bạn chưa có thu nhập được ghi nhận.")
         elif expense_ratio > 100:
-            st.error(
-                "Chi tiêu đang vượt quá tổng thu nhập."
-            )
-
+            st.error("Chi tiêu đang vượt quá tổng thu nhập.")
         elif expense_ratio >= 80:
-            st.warning(
-                "Bạn nên chú ý kiểm soát chi tiêu."
-            )
-
+            st.warning("Bạn nên chú ý kiểm soát chi tiêu.")
         else:
             st.success(
                 "Tình hình chi tiêu đang trong mức hợp lý."
@@ -919,28 +584,20 @@ def show_dashboard():
         '<div class="content-card">',
         unsafe_allow_html=True,
     )
-
     st.subheader("Giao dịch gần đây")
 
     if transactions:
-
         recent = sorted(
             transactions,
             key=lambda item: item.transaction_date,
             reverse=True,
         )[:5]
-
-        recent_df = transaction_dataframe(
-            recent,
-            categories,
-        )
-
+        recent_df = transaction_dataframe(recent, categories)
         st.dataframe(
             recent_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
-
     else:
         st.info("Bạn chưa có giao dịch nào.")
 
@@ -952,7 +609,6 @@ def show_dashboard():
 # =========================================================
 
 def show_transactions():
-
     show_page_title(
         "Quản lý giao dịch",
         "Thêm, chỉnh sửa, xóa và tìm kiếm các khoản thu chi.",
@@ -966,23 +622,16 @@ def show_transactions():
         "📥 Nhập CSV",
     ])
 
-    # -----------------------------------------------------
     # THÊM GIAO DỊCH
-    # -----------------------------------------------------
-
     with tab_add:
-
         st.subheader("Tạo giao dịch mới")
 
         with st.form("add_transaction_form"):
-
             transaction_type = st.selectbox(
                 "Loại giao dịch",
                 ["expense", "income"],
                 format_func=lambda value: (
-                    "Chi tiêu"
-                    if value == "expense"
-                    else "Thu nhập"
+                    "Chi tiêu" if value == "expense" else "Thu nhập"
                 ),
             )
 
@@ -990,23 +639,18 @@ def show_transactions():
                 categories,
                 transaction_type,
             )
-
             category_map = {
                 item.name: item.id
                 for item in available_categories
             }
 
             if available_categories:
-
                 selected_category = st.selectbox(
                     "Danh mục",
                     list(category_map.keys()),
                 )
-
             else:
-
                 selected_category = None
-
                 st.warning(
                     "Bạn chưa có danh mục phù hợp. "
                     "Hãy tạo danh mục trước."
@@ -1017,12 +661,10 @@ def show_transactions():
                 min_value=0,
                 step=10000,
             )
-
             description = st.text_input(
                 "Mô tả",
                 placeholder="Ví dụ: Ăn sáng, tiền lương...",
             )
-
             transaction_date = st.date_input(
                 "Ngày giao dịch",
                 value=date.today(),
@@ -1031,29 +673,17 @@ def show_transactions():
             submitted = st.form_submit_button(
                 "Lưu giao dịch",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
 
             if submitted:
-
                 if not available_categories:
-                    st.error(
-                        "Bạn cần tạo danh mục phù hợp trước."
-                    )
-
+                    st.error("Bạn cần tạo danh mục phù hợp trước.")
                 elif amount <= 0:
-                    st.error(
-                        "Số tiền phải lớn hơn 0."
-                    )
-
+                    st.error("Số tiền phải lớn hơn 0.")
                 else:
-
                     try:
-
-                        category_id = category_map[
-                            selected_category
-                        ]
-
+                        category_id = category_map[selected_category]
                         success, result = create_transaction_api(
                             category_id=category_id,
                             transaction_type=transaction_type,
@@ -1063,25 +693,15 @@ def show_transactions():
                         )
 
                         if success:
-                            st.success(
-                                "Đã thêm giao dịch thành công."
-                            )
+                            st.success("Đã thêm giao dịch thành công.")
                             st.rerun()
-
                         else:
                             st.error(get_api_error(result))
-
                     except Exception as error:
-                        st.error(
-                            f"Không thể lưu giao dịch: {error}"
-                        )
+                        st.error(f"Không thể lưu giao dịch: {error}")
 
-    # -----------------------------------------------------
     # DANH SÁCH, SỬA VÀ XÓA GIAO DỊCH
-    # -----------------------------------------------------
-
     with tab_list:
-
         st.subheader("Danh sách giao dịch")
 
         search_text = st.text_input(
@@ -1089,7 +709,6 @@ def show_transactions():
             placeholder="Nhập nội dung cần tìm...",
             key="transaction_search",
         )
-
         filter_type = st.selectbox(
             "Lọc theo loại",
             ["Tất cả", "Thu nhập", "Chi tiêu"],
@@ -1098,31 +717,21 @@ def show_transactions():
         filtered = list(transactions)
 
         if filter_type == "Thu nhập":
-
             filtered = [
-                item
-                for item in filtered
+                item for item in filtered
                 if item.transaction_type == "income"
             ]
-
         elif filter_type == "Chi tiêu":
-
             filtered = [
-                item
-                for item in filtered
+                item for item in filtered
                 if item.transaction_type == "expense"
             ]
 
         if search_text.strip():
-
             keyword = search_text.strip().casefold()
-
             filtered = [
-                item
-                for item in filtered
-                if keyword in (
-                    item.description or ""
-                ).casefold()
+                item for item in filtered
+                if keyword in (item.description or "").casefold()
                 or keyword in category_name(
                     item.category_id,
                     categories,
@@ -1130,47 +739,33 @@ def show_transactions():
             ]
 
         if filtered:
-
             filtered = sorted(
                 filtered,
                 key=lambda item: item.transaction_date,
                 reverse=True,
             )
-
-            df = transaction_dataframe(
-                filtered,
-                categories,
-            )
-
+            df = transaction_dataframe(filtered, categories)
             st.dataframe(
                 df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
             st.divider()
-
-            st.subheader(
-                "Chỉnh sửa hoặc xóa giao dịch"
-            )
+            st.subheader("Chỉnh sửa hoặc xóa giao dịch")
 
             transaction_map = {
                 (
-                    f"#{item.id} - "
-                    f"{item.transaction_date} - "
+                    f"#{item.id} - {item.transaction_date} - "
                     f"{item.description or 'Không có mô tả'}"
                 ): item
                 for item in filtered
             }
-
             selected_label = st.selectbox(
                 "Chọn giao dịch",
                 list(transaction_map.keys()),
             )
-
-            selected_transaction = transaction_map[
-                selected_label
-            ]
+            selected_transaction = transaction_map[selected_label]
 
             edit_categories = get_category_options(
                 categories,
@@ -1178,42 +773,32 @@ def show_transactions():
             )
 
             if not edit_categories:
-
                 st.warning(
                     "Không có danh mục phù hợp để chỉnh sửa."
                 )
-
             else:
-
                 with st.form("edit_transaction_form"):
-
                     category_labels = {
                         item.name: item.id
                         for item in edit_categories
                     }
-
                     current_category = category_name(
                         selected_transaction.category_id,
                         categories,
                     )
+                    category_names = list(category_labels.keys())
 
-                    category_names = list(
-                        category_labels.keys()
+                    default_index = (
+                        category_names.index(current_category)
+                        if current_category in category_names
+                        else 0
                     )
-
-                    if current_category in category_names:
-                        default_index = category_names.index(
-                            current_category
-                        )
-                    else:
-                        default_index = 0
 
                     new_category = st.selectbox(
                         "Danh mục",
                         category_names,
                         index=default_index,
                     )
-
                     new_amount = st.number_input(
                         "Số tiền",
                         min_value=1,
@@ -1222,29 +807,21 @@ def show_transactions():
                             int(selected_transaction.amount),
                         ),
                     )
-
                     new_description = st.text_input(
                         "Mô tả",
                         value=selected_transaction.description or "",
                     )
-
                     new_date = st.date_input(
                         "Ngày giao dịch",
                         value=selected_transaction.transaction_date,
                     )
-
                     save_edit = st.form_submit_button(
                         "Lưu thay đổi",
                         type="primary",
                     )
 
                     if save_edit:
-
                         try:
-
-                            # API hiện tại yêu cầu gửi đầy đủ
-                            # các trường khi cập nhật giao dịch.
-
                             success, result = update_transaction_api(
                                 transaction_id=selected_transaction.id,
                                 category_id=category_labels[new_category],
@@ -1261,17 +838,14 @@ def show_transactions():
                                     "Đã cập nhật giao dịch thành công."
                                 )
                                 st.rerun()
-
                             else:
                                 st.error(get_api_error(result))
-
                         except Exception as error:
                             st.error(
                                 f"Không thể cập nhật giao dịch: {error}"
                             )
 
             st.divider()
-
             confirm_delete = st.checkbox(
                 "Tôi xác nhận muốn xóa giao dịch đã chọn.",
                 key="confirm_delete_transaction",
@@ -1281,46 +855,28 @@ def show_transactions():
                 "🗑️ Xóa giao dịch này",
                 disabled=not confirm_delete,
             ):
-
                 try:
-
                     success, result = delete_transaction_api(
                         selected_transaction.id
                     )
 
                     if success:
-                        st.success(
-                            "Đã xóa giao dịch thành công."
-                        )
+                        st.success("Đã xóa giao dịch thành công.")
                         st.rerun()
-
                     else:
                         st.error(get_api_error(result))
-
                 except Exception as error:
-                    st.error(
-                        f"Không thể xóa giao dịch: {error}"
-                    )
-
+                    st.error(f"Không thể xóa giao dịch: {error}")
         else:
+            st.info("Không tìm thấy giao dịch phù hợp.")
 
-            st.info(
-                "Không tìm thấy giao dịch phù hợp."
-            )
-
-    # -----------------------------------------------------
     # NHẬP GIAO DỊCH TỪ CSV
-    # -----------------------------------------------------
-
     with tab_import:
-
         st.subheader("Nhập giao dịch từ CSV")
-
         st.caption(
             "File CSV cần có các cột: "
             "Ngày, Loại, Danh mục, Số tiền, Mô tả."
         )
-
         st.info(
             "Loại giao dịch có thể ghi: "
             "Thu nhập, Chi tiêu, income hoặc expense."
@@ -1333,16 +889,9 @@ def show_transactions():
         )
 
         if uploaded_file is not None:
-
             try:
-
-                content = uploaded_file.getvalue().decode(
-                    "utf-8-sig"
-                )
-
-                imported_df = pd.read_csv(
-                    StringIO(content)
-                )
+                content = uploaded_file.getvalue().decode("utf-8-sig")
+                imported_df = pd.read_csv(StringIO(content))
 
                 required_columns = [
                     "Ngày",
@@ -1351,33 +900,23 @@ def show_transactions():
                     "Số tiền",
                     "Mô tả",
                 ]
-
                 missing_columns = [
-                    column
-                    for column in required_columns
+                    column for column in required_columns
                     if column not in imported_df.columns
                 ]
 
                 if missing_columns:
-
                     st.error(
                         "File CSV thiếu cột: "
                         + ", ".join(missing_columns)
                     )
-
                 elif imported_df.empty:
-
-                    st.warning(
-                        "File CSV không có dữ liệu."
-                    )
-
+                    st.warning("File CSV không có dữ liệu.")
                 else:
-
                     st.write("Xem trước dữ liệu:")
-
                     st.dataframe(
                         imported_df.head(10),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
 
@@ -1386,7 +925,6 @@ def show_transactions():
                         type="primary",
                         key="import_csv_button",
                     ):
-
                         success_count = 0
                         error_count = 0
                         error_details = []
@@ -1400,29 +938,16 @@ def show_transactions():
                         }
 
                         for index, row in imported_df.iterrows():
-
                             try:
-
                                 raw_type = str(
                                     row["Loại"]
                                 ).strip().casefold()
 
-                                if raw_type in [
-                                    "chi tiêu",
-                                    "expense",
-                                ]:
-
+                                if raw_type in ["chi tiêu", "expense"]:
                                     transaction_type = "expense"
-
-                                elif raw_type in [
-                                    "thu nhập",
-                                    "income",
-                                ]:
-
+                                elif raw_type in ["thu nhập", "income"]:
                                     transaction_type = "income"
-
                                 else:
-
                                     raise ValueError(
                                         "Loại giao dịch không hợp lệ."
                                     )
@@ -1431,7 +956,6 @@ def show_transactions():
                                     str(row["Danh mục"]).strip().casefold(),
                                     transaction_type,
                                 )
-
                                 category_id = category_lookup.get(
                                     category_key
                                 )
@@ -1445,11 +969,7 @@ def show_transactions():
                                     row["Ngày"],
                                     errors="raise",
                                 ).date()
-
-                                amount = parse_amount(
-                                    row["Số tiền"]
-                                )
-
+                                amount = parse_amount(row["Số tiền"])
                                 description = (
                                     ""
                                     if pd.isna(row["Mô tả"])
@@ -1465,42 +985,32 @@ def show_transactions():
                                 )
 
                                 if success:
-
                                     success_count += 1
-
                                 else:
-
                                     error_count += 1
-
                                     error_details.append(
                                         f"Dòng {index + 2}: "
                                         f"{get_api_error(result)}"
                                     )
 
                             except Exception as error:
-
                                 error_count += 1
-
                                 error_details.append(
                                     f"Dòng {index + 2}: {error}"
                                 )
 
                         if success_count:
                             st.success(
-                                f"Đã nhập thành công "
-                                f"{success_count} giao dịch."
+                                f"Đã nhập thành công {success_count} giao dịch."
                             )
 
                         if error_count:
-
                             st.warning(
                                 f"Có {error_count} dòng chưa được nhập."
                             )
-
                             with st.expander(
                                 "Xem chi tiết các dòng bị lỗi"
                             ):
-
                                 for detail in error_details[:30]:
                                     st.write(f"- {detail}")
 
@@ -1508,25 +1018,21 @@ def show_transactions():
                             st.rerun()
 
             except UnicodeDecodeError:
-
                 st.error(
                     "Không đọc được bảng mã CSV. "
                     "Hãy lưu file với mã hóa UTF-8."
                 )
-
             except Exception as error:
-
-                st.error(
-                    f"Không thể đọc file CSV: {error}"
-                )
+                st.error(f"Không thể đọc file CSV: {error}")
 
 
 # =========================================================
+
+
 # 7. QUẢN LÝ DANH MỤC
 # =========================================================
 
 def show_categories():
-
     show_page_title(
         "Quản lý danh mục",
         "Phân loại các khoản thu nhập và chi tiêu.",
@@ -1539,86 +1045,51 @@ def show_categories():
         "📋 Danh sách danh mục",
     ])
 
-    # -----------------------------------------------------
-    # THÊM DANH MỤC
-    # -----------------------------------------------------
-
     with tab_add:
-
         st.subheader("Tạo danh mục mới")
 
         with st.form("add_category_form"):
-
             name = st.text_input(
                 "Tên danh mục",
                 placeholder="Ví dụ: Ăn uống, Lương, Di chuyển...",
             )
-
             category_type = st.selectbox(
                 "Loại danh mục",
                 ["expense", "income"],
                 format_func=lambda value: (
-                    "Chi tiêu"
-                    if value == "expense"
-                    else "Thu nhập"
+                    "Chi tiêu" if value == "expense" else "Thu nhập"
                 ),
             )
-
             submitted = st.form_submit_button(
                 "Thêm danh mục",
                 type="primary",
             )
 
             if submitted:
-
                 if not name.strip():
-
-                    st.error(
-                        "Vui lòng nhập tên danh mục."
-                    )
-
+                    st.error("Vui lòng nhập tên danh mục.")
                 elif any(
-                    item.name.strip().casefold()
-                    == name.strip().casefold()
+                    item.name.strip().casefold() == name.strip().casefold()
                     and item.category_type == category_type
                     for item in categories
                 ):
-
-                    st.error(
-                        "Danh mục này đã tồn tại."
-                    )
-
+                    st.error("Danh mục này đã tồn tại.")
                 else:
-
                     try:
-
                         success, result = create_category_api(
                             name.strip(),
                             category_type,
                         )
-
                         if success:
-                            st.success(
-                                "Đã tạo danh mục thành công."
-                            )
+                            st.success("Đã tạo danh mục thành công.")
                             st.rerun()
-
                         else:
                             st.error(get_api_error(result))
-
                     except Exception as error:
-                        st.error(
-                            f"Không thể tạo danh mục: {error}"
-                        )
-
-    # -----------------------------------------------------
-    # DANH SÁCH VÀ XÓA DANH MỤC
-    # -----------------------------------------------------
+                        st.error(f"Không thể tạo danh mục: {error}")
 
     with tab_list:
-
         if categories:
-
             category_df = pd.DataFrame([
                 {
                     "ID": item.id,
@@ -1631,15 +1102,13 @@ def show_categories():
                 }
                 for item in categories
             ])
-
             st.dataframe(
                 category_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
             st.divider()
-
             st.subheader("Xóa danh mục")
 
             category_map = {
@@ -1649,13 +1118,11 @@ def show_categories():
                 ): item
                 for item in categories
             }
-
             selected_label = st.selectbox(
                 "Chọn danh mục cần xóa",
                 list(category_map.keys()),
                 key="delete_category_select",
             )
-
             selected_category = category_map[selected_label]
 
             confirm_delete = st.checkbox(
@@ -1667,36 +1134,19 @@ def show_categories():
                 "🗑️ Xóa danh mục",
                 disabled=not confirm_delete,
             ):
-
                 try:
-
                     success, result = delete_category_api(
                         selected_category.id
                     )
-
                     if success:
-
-                        st.success(
-                            "Đã xóa danh mục thành công."
-                        )
-
+                        st.success("Đã xóa danh mục thành công.")
                         st.rerun()
-
                     else:
-
                         st.error(get_api_error(result))
-
                 except Exception as error:
-
-                    st.error(
-                        f"Không thể xóa danh mục: {error}"
-                    )
-
+                    st.error(f"Không thể xóa danh mục: {error}")
         else:
-
-            st.info(
-                "Bạn chưa có danh mục nào."
-            )
+            st.info("Bạn chưa có danh mục nào.")
 
 
 # =========================================================
@@ -1704,7 +1154,6 @@ def show_categories():
 # =========================================================
 
 def show_statistics():
-
     show_page_title(
         "Thống kê và phân tích",
         "Phân tích thu nhập, chi tiêu theo thời gian và danh mục.",
@@ -1713,57 +1162,40 @@ def show_statistics():
     transactions, categories = load_data()
 
     if not transactions:
-
-        st.info(
-            "Chưa có dữ liệu để thống kê."
-        )
-
+        st.info("Chưa có dữ liệu để thống kê.")
         return
 
-    df = transaction_dataframe(
-        transactions,
-        categories,
-    )
-
-    df["Ngày"] = pd.to_datetime(
-        df["Ngày"],
-        errors="coerce",
-    )
-
+    df = transaction_dataframe(transactions, categories)
+    df["Ngày"] = pd.to_datetime(df["Ngày"], errors="coerce")
     df = df.dropna(subset=["Ngày"])
 
     if df.empty:
-
-        st.warning(
-            "Không có dữ liệu ngày hợp lệ để thống kê."
-        )
-
+        st.warning("Không có dữ liệu ngày hợp lệ để thống kê.")
         return
 
+    # -----------------------------------------------------
+    # Bộ lọc thời gian
+    # -----------------------------------------------------
+
+    st.subheader("Khoảng thời gian thống kê")
     col1, col2 = st.columns(2)
 
     with col1:
-
         start_date = st.date_input(
             "Từ ngày",
-            value=min(df["Ngày"]).date(),
+            value=df["Ngày"].min().date(),
             key="statistics_start_date",
         )
 
     with col2:
-
         end_date = st.date_input(
             "Đến ngày",
-            value=max(df["Ngày"]).date(),
+            value=df["Ngày"].max().date(),
             key="statistics_end_date",
         )
 
     if start_date > end_date:
-
-        st.error(
-            "Ngày bắt đầu không được lớn hơn ngày kết thúc."
-        )
-
+        st.error("Ngày bắt đầu không được lớn hơn ngày kết thúc.")
         return
 
     filtered_df = df[
@@ -1772,12 +1204,15 @@ def show_statistics():
     ].copy()
 
     if filtered_df.empty:
-
         st.warning(
-            "Không có giao dịch trong khoảng thời gian này."
+            "Không có giao dịch trong khoảng thời gian này. "
+            "Hãy chọn khoảng thời gian khác."
         )
-
         return
+
+    # -----------------------------------------------------
+    # Các chỉ số tổng quan
+    # -----------------------------------------------------
 
     income = filtered_df.loc[
         filtered_df["Loại"] == "Thu nhập",
@@ -1792,119 +1227,253 @@ def show_statistics():
     balance = income - expense
 
     col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Tổng thu nhập",
-        format_money(income),
-    )
-
-    col2.metric(
-        "Tổng chi tiêu",
-        format_money(expense),
-    )
-
-    col3.metric(
-        "Chênh lệch",
-        format_money(balance),
-    )
+    col1.metric("Tổng thu nhập", format_money(income))
+    col2.metric("Tổng chi tiêu", format_money(expense))
+    col3.metric("Chênh lệch thu - chi", format_money(balance))
 
     st.divider()
 
-    left, right = st.columns(2)
+    # -----------------------------------------------------
+    # BIỂU ĐỒ 1: THU NHẬP VÀ CHI TIÊU THEO THÁNG
+    # -----------------------------------------------------
 
-    with left:
+    st.subheader("Thu nhập và chi tiêu theo tháng")
+    st.caption(
+        "So sánh tổng thu nhập và chi tiêu trong từng tháng "
+        "thuộc khoảng thời gian đã chọn."
+    )
 
-        st.subheader("Thống kê theo tháng")
+    # Tạo đầy đủ các tháng trong phạm vi lọc.
+    # Tháng không có giao dịch sẽ được điền giá trị 0.
+    start_period = pd.Period(start_date, freq="M")
+    end_period = pd.Period(end_date, freq="M")
+    all_months = pd.period_range(
+        start=start_period,
+        end=end_period,
+        freq="M",
+    )
 
-        filtered_df["Tháng"] = (
-            filtered_df["Ngày"]
-            .dt.to_period("M")
-            .astype(str)
+    filtered_df["Tháng"] = filtered_df["Ngày"].dt.to_period("M")
+
+    monthly = filtered_df.pivot_table(
+        index="Tháng",
+        columns="Loại",
+        values="Số tiền",
+        aggfunc="sum",
+        fill_value=0,
+    )
+
+    monthly = monthly.reindex(
+        columns=["Thu nhập", "Chi tiêu"],
+        fill_value=0,
+    )
+    monthly = monthly.reindex(all_months, fill_value=0)
+
+    month_labels = [
+        f"Tháng {period.month:02d}/{period.year}"
+        for period in all_months
+    ]
+
+    monthly.index = month_labels
+    monthly.index.name = "Tháng"
+
+    chart_df = (
+        monthly
+        .reset_index()
+        .melt(
+            id_vars="Tháng",
+            var_name="Loại",
+            value_name="Số tiền",
         )
+    )
 
-        monthly = filtered_df.pivot_table(
-            index="Tháng",
-            columns="Loại",
-            values="Số tiền",
-            aggfunc="sum",
-            fill_value=0,
+    monthly_chart = (
+        alt.Chart(chart_df)
+        .mark_bar(
+            size=25,
+            cornerRadiusTopLeft=4,
+            cornerRadiusTopRight=4,
         )
+        .encode(
+            x=alt.X(
+                "Tháng:N",
+                sort=month_labels,
+                title="Thời gian",
+                axis=alt.Axis(
+                    labelAngle=-35,
+                    labelLimit=140,
+                ),
+            ),
+            xOffset=alt.XOffset("Loại:N"),
+            y=alt.Y(
+                "Số tiền:Q",
+                title="Số tiền (VNĐ)",
+                scale=alt.Scale(zero=True),
+                axis=alt.Axis(format=",.0f"),
+            ),
+            color=alt.Color(
+                "Loại:N",
+                title="Loại giao dịch",
+                scale=alt.Scale(
+                    domain=["Thu nhập", "Chi tiêu"],
+                    range=["#15966b", "#df6868"],
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("Tháng:N", title="Tháng"),
+                alt.Tooltip("Loại:N", title="Loại giao dịch"),
+                alt.Tooltip(
+                    "Số tiền:Q",
+                    title="Số tiền",
+                    format=",.0f",
+                ),
+            ],
+        )
+        .properties(height=380)
+        .configure_view(strokeOpacity=0)
+        .configure_axis(
+            gridColor="#e8edf3",
+            domain=False,
+            tickColor="#d9e1ec",
+        )
+        .configure_legend(
+            orient="top",
+            title=None,
+        )
+    )
 
-        st.bar_chart(monthly)
+    st.altair_chart(
+        monthly_chart,
+        use_container_width=True,
+    )
 
-    with right:
-
-        st.subheader("Chi tiêu theo danh mục")
-
-        expense_df = filtered_df[
-            filtered_df["Loại"] == "Chi tiêu"
-        ]
-
-        if not expense_df.empty:
-
-            category_stats = (
-                expense_df
-                .groupby("Danh mục")["Số tiền"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
-            st.bar_chart(category_stats)
-
-        else:
-
-            st.info(
-                "Chưa có khoản chi tiêu nào trong thời gian này."
-            )
+    with st.expander("Xem số liệu thu chi từng tháng"):
+        display_monthly = monthly.copy()
+        display_monthly["Chênh lệch"] = (
+            display_monthly["Thu nhập"]
+            - display_monthly["Chi tiêu"]
+        )
+        display_monthly = display_monthly.reset_index()
+        display_monthly = display_monthly.rename(
+            columns={
+                "Thu nhập": "Tổng thu nhập (VNĐ)",
+                "Chi tiêu": "Tổng chi tiêu (VNĐ)",
+                "Chênh lệch": "Chênh lệch (VNĐ)",
+            }
+        )
+        st.dataframe(
+            display_monthly,
+            width="stretch",
+            hide_index=True,
+        )
 
     st.divider()
+
+    # -----------------------------------------------------
+    # BIỂU ĐỒ 2: CHI TIÊU THEO DANH MỤC
+    # -----------------------------------------------------
+
+    st.subheader("Chi tiêu theo danh mục")
+
+    expense_df = filtered_df[
+        filtered_df["Loại"] == "Chi tiêu"
+    ]
+
+    if not expense_df.empty:
+        category_stats = (
+            expense_df
+            .groupby("Danh mục")["Số tiền"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        category_chart_df = (
+            category_stats
+            .rename_axis("Danh mục")
+            .reset_index(name="Số tiền")
+        )
+
+        category_chart = (
+            alt.Chart(category_chart_df)
+            .mark_bar(
+                color="#087f8c",
+                cornerRadiusEnd=5,
+            )
+            .encode(
+                x=alt.X(
+                    "Số tiền:Q",
+                    title="Số tiền (VNĐ)",
+                    axis=alt.Axis(format=",.0f"),
+                ),
+                y=alt.Y(
+                    "Danh mục:N",
+                    sort="-x",
+                    title="Danh mục",
+                ),
+                tooltip=[
+                    alt.Tooltip("Danh mục:N"),
+                    alt.Tooltip("Số tiền:Q", format=",.0f"),
+                ],
+            )
+            .properties(height=300)
+        )
+
+        st.altair_chart(
+            category_chart,
+            use_container_width=True,
+        )
+    else:
+        st.info(
+            "Chưa có khoản chi tiêu nào trong thời gian này."
+        )
+
+    st.divider()
+
+    # -----------------------------------------------------
+    # NHẬN XÉT TÀI CHÍNH
+    # -----------------------------------------------------
 
     st.subheader("Nhận xét tài chính")
 
     if income > 0:
-
         ratio = expense / income * 100
 
-        st.write(
-            f"Tỷ lệ chi tiêu trên thu nhập: "
-            f"**{ratio:.1f}%**"
+        st.metric(
+            "Tỷ lệ chi tiêu trên thu nhập",
+            f"{ratio:.1f}%",
         )
+        st.progress(min(ratio / 100, 1.0))
 
         if ratio > 100:
-
             st.error(
-                "Bạn đang chi tiêu nhiều hơn thu nhập "
+                "Chi tiêu đang vượt quá thu nhập "
                 "trong khoảng thời gian đã chọn."
             )
-
         elif ratio >= 80:
-
             st.warning(
-                "Mức chi tiêu khá cao. "
-                "Bạn nên cân nhắc giảm những khoản chưa cần thiết."
+                "Chi tiêu đang chiếm phần lớn thu nhập. "
+                "Bạn nên cân nhắc kiểm soát các khoản chưa cần thiết."
             )
-
         else:
-
             st.success(
-                "Mức chi tiêu hiện tại đang thấp hơn thu nhập. "
-                "Bạn có thể cân nhắc tiết kiệm phần còn lại."
+                "Chi tiêu đang thấp hơn thu nhập. "
+                "Bạn có thể cân nhắc dành phần chênh lệch "
+                "cho tiết kiệm hoặc các mục tiêu tài chính."
             )
-
     else:
-
         st.info(
-            "Chưa có thu nhập trong khoảng thời gian được chọn "
-            "nên chưa thể tính tỷ lệ chi tiêu."
+            "Không có thu nhập trong khoảng thời gian này "
+            "nên chưa thể đánh giá tỷ lệ chi tiêu trên thu nhập."
         )
 
 
 # =========================================================
+
+
 # 9. XUẤT DỮ LIỆU
 # =========================================================
 
 def show_export():
-
     show_page_title(
         "Xuất dữ liệu",
         "Tải xuống dữ liệu giao dịch để lưu trữ và báo cáo.",
@@ -1913,57 +1482,39 @@ def show_export():
     transactions, categories = load_data()
 
     if not transactions:
-
-        st.info(
-            "Chưa có dữ liệu để xuất."
-        )
-
+        st.info("Chưa có dữ liệu để xuất.")
         return
 
-    df = transaction_dataframe(
-        transactions,
-        categories,
-    )
+    df = transaction_dataframe(transactions, categories)
 
     st.subheader("Xem trước dữ liệu")
-
     st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
     st.divider()
-
     col1, col2 = st.columns(2)
 
-    # CSV
     with col1:
-
-        csv_data = df.to_csv(
-            index=False
-        ).encode("utf-8-sig")
-
+        csv_data = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             label="📄 Tải xuống CSV",
             data=csv_data,
             file_name="giao_dich_ca_nhan.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
-    # EXCEL
     with col2:
-
         try:
-
             excel_buffer = BytesIO()
 
             with pd.ExcelWriter(
                 excel_buffer,
                 engine="openpyxl",
             ) as writer:
-
                 df.to_excel(
                     writer,
                     sheet_name="Giao dịch",
@@ -2001,14 +1552,11 @@ def show_export():
                     "application/vnd.openxmlformats-officedocument."
                     "spreadsheetml.sheet"
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
         except Exception as error:
-
-            st.error(
-                f"Không thể tạo file Excel: {error}"
-            )
+            st.error(f"Không thể tạo file Excel: {error}")
 
 
 # =========================================================
@@ -2016,20 +1564,12 @@ def show_export():
 # =========================================================
 
 def show_main_app():
-
-    username = (
-        get_user_value("username")
-        or "Người dùng"
-    )
+    username = get_user_value("username") or "Người dùng"
 
     with st.sidebar:
-
         st.markdown("## 💳 Expense Manager")
-
         st.caption("PERSONAL FINANCE")
-
         st.divider()
-
         st.markdown("**TÀI CHÍNH CÁ NHÂN**")
 
         menu = st.radio(
@@ -2042,59 +1582,39 @@ def show_main_app():
                 "Xuất dữ liệu",
             ],
             label_visibility="collapsed",
+            key="main_navigation",
         )
 
         st.divider()
 
         with st.container(border=True):
-
             st.markdown("### 👤 Tài khoản")
-
-            st.markdown(
-                f"**{html.escape(str(username))}**"
-            )
-
+            st.markdown(f"**{html.escape(str(username))}**")
             st.caption("Tài khoản cá nhân")
 
         st.write("")
 
-        if st.button(
-            "Đăng xuất",
-            use_container_width=True,
-        ):
-
+        if st.button("Đăng xuất", width="stretch"):
             api_logout()
-
             st.session_state.user = None
             st.session_state.logged_in = False
             st.session_state.access_token = None
-
             st.rerun()
 
         st.divider()
-
         st.caption(
             "Personal Expense Management · Version 2.0"
         )
 
     if menu == "Tổng quan":
-
         show_dashboard()
-
     elif menu == "Quản lý giao dịch":
-
         show_transactions()
-
     elif menu == "Quản lý danh mục":
-
         show_categories()
-
     elif menu == "Thống kê":
-
         show_statistics()
-
     elif menu == "Xuất dữ liệu":
-
         show_export()
 
 
@@ -2103,9 +1623,6 @@ def show_main_app():
 # =========================================================
 
 if st.session_state.logged_in and st.session_state.user:
-
     show_main_app()
-
 else:
-
     show_auth_page()

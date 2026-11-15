@@ -1,17 +1,24 @@
 
+import os
 import requests
 import streamlit as st
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-
+from dotenv import load_dotenv
 
 # =====================================================
 # CẤU HÌNH API
 # =====================================================
 
-API_BASE_URL = "http://127.0.0.1:8000"
+load_dotenv()
+
+API_BASE_URL = os.getenv(
+    "API_BASE_URL",
+    "http://127.0.0.1:8000"
+).strip().rstrip("/")
+
 API_TIMEOUT = 15
 
 
@@ -85,15 +92,13 @@ def _request(method, endpoint, **kwargs):
 # =====================================================
 
 def register(username, email, password):
-    """Đăng ký tài khoản mới."""
-
     username = username.strip()
     email = email.strip()
 
     if not username or not email or not password:
         return False, "Vui lòng nhập đầy đủ thông tin."
 
-    success, result = _request(
+    return _request(
         "POST",
         "/users/",
         json={
@@ -103,19 +108,12 @@ def register(username, email, password):
         }
     )
 
-    if success:
-        return True, result
-
-    return False, result
-
 
 # =====================================================
 # 2. ĐĂNG NHẬP
 # =====================================================
 
 def login(username, password, scopes=None):
-    """Đăng nhập và lưu JWT vào Streamlit Session."""
-
     if not username.strip() or not password:
         return False, "Vui lòng nhập tên đăng nhập và mật khẩu."
 
@@ -165,17 +163,8 @@ def login(username, password, scopes=None):
 # =====================================================
 
 def get_current_user():
-    """Lấy thông tin tài khoản đang đăng nhập."""
-
-    success, result = _request(
-        "GET",
-        "/users/me"
-    )
-
-    if success:
-        return result
-
-    return None
+    success, result = _request("GET", "/users/me")
+    return result if success else None
 
 
 # =====================================================
@@ -183,22 +172,11 @@ def get_current_user():
 # =====================================================
 
 def get_categories_api():
-    """Lấy danh sách danh mục của người dùng."""
-
-    success, result = _request(
-        "GET",
-        "/categories"
-    )
-
-    if success:
-        return result
-
-    return None
+    success, result = _request("GET", "/categories")
+    return result if success else None
 
 
 def create_category_api(name, category_type):
-    """Tạo danh mục mới."""
-
     name = name.strip()
 
     if not name:
@@ -207,7 +185,7 @@ def create_category_api(name, category_type):
     if category_type not in ("income", "expense"):
         return False, "Loại danh mục không hợp lệ."
 
-    success, result = _request(
+    return _request(
         "POST",
         "/categories",
         json={
@@ -216,18 +194,9 @@ def create_category_api(name, category_type):
         }
     )
 
-    return success, result
-
 
 def delete_category_api(category_id):
-    """Xóa danh mục."""
-
-    success, result = _request(
-        "DELETE",
-        f"/categories/{int(category_id)}"
-    )
-
-    return success, result
+    return _request("DELETE", f"/categories/{int(category_id)}")
 
 
 # =====================================================
@@ -235,17 +204,8 @@ def delete_category_api(category_id):
 # =====================================================
 
 def get_transactions_api():
-    """Lấy danh sách giao dịch."""
-
-    success, result = _request(
-        "GET",
-        "/transactions"
-    )
-
-    if success:
-        return result
-
-    return None
+    success, result = _request("GET", "/transactions")
+    return result if success else None
 
 
 def create_transaction_api(
@@ -255,8 +215,6 @@ def create_transaction_api(
     description="",
     transaction_date=None
 ):
-    """Tạo giao dịch mới."""
-
     if transaction_type not in ("income", "expense"):
         return False, "Loại giao dịch không hợp lệ."
 
@@ -280,13 +238,11 @@ def create_transaction_api(
         "transaction_date": transaction_date.isoformat()
     }
 
-    success, result = _request(
+    return _request(
         "POST",
         "/transactions",
         json=payload
     )
-
-    return success, result
 
 
 def update_transaction_api(
@@ -297,8 +253,6 @@ def update_transaction_api(
     description=None,
     transaction_date=None
 ):
-    """Cập nhật giao dịch."""
-
     payload = {}
 
     if category_id is not None:
@@ -307,7 +261,6 @@ def update_transaction_api(
     if transaction_type is not None:
         if transaction_type not in ("income", "expense"):
             return False, "Loại giao dịch không hợp lệ."
-
         payload["transaction_type"] = transaction_type
 
     if amount is not None:
@@ -315,7 +268,7 @@ def update_transaction_api(
             amount = Decimal(str(amount))
 
             if not amount.is_finite() or amount <= 0:
-                return False, "Số tiền phải lớn hơn 0."
+                return False, "Số tiền không hợp lệ."
 
             payload["amount"] = str(amount)
 
@@ -335,24 +288,18 @@ def update_transaction_api(
     if not payload:
         return False, "Không có thông tin nào cần cập nhật."
 
-    success, result = _request(
+    return _request(
         "PUT",
         f"/transactions/{int(transaction_id)}",
         json=payload
     )
 
-    return success, result
-
 
 def delete_transaction_api(transaction_id):
-    """Xóa giao dịch."""
-
-    success, result = _request(
+    return _request(
         "DELETE",
         f"/transactions/{int(transaction_id)}"
     )
-
-    return success, result
 
 
 # =====================================================
@@ -360,13 +307,6 @@ def delete_transaction_api(transaction_id):
 # =====================================================
 
 def logout():
-    """
-    Xóa JWT khỏi phiên Streamlit.
-
-    Lưu ý: Đây là đăng xuất phía giao diện,
-    không phải thu hồi JWT ở phía máy chủ.
-    """
-
     st.session_state.pop("access_token", None)
     st.session_state.pop("token_type", None)
     st.session_state.pop("user", None)
