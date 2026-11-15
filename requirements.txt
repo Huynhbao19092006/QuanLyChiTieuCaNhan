@@ -1,7 +1,7 @@
 
 streamlit
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 email-validator
 
@@ -14,8 +14,9 @@ pandas
 numpy
 matplotlib
 
-pyjwt
+PyJWT
 passlib[argon2]
+argon2-cffi
 
 openpyxl
 python-docx

@@ -11,7 +11,7 @@ from config import (
     SECRET_KEY,
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    OAUTH2_SCOPES
+    OAUTH2_SCOPES,
 )
 
 
@@ -21,7 +21,7 @@ from config import (
 
 pwd_context = CryptContext(
     schemes=["argon2"],
-    deprecated="auto"
+    deprecated="auto",
 )
 
 
@@ -32,10 +32,16 @@ def hash_password(password: str) -> str:
 
 def verify_password(
     password: str,
-    hashed_password: str
+    hashed_password: str,
 ) -> bool:
     """Kiểm tra mật khẩu người dùng."""
-    return pwd_context.verify(password, hashed_password)
+    try:
+        return pwd_context.verify(
+            password,
+            hashed_password,
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 # =====================================================
@@ -43,8 +49,8 @@ def verify_password(
 # =====================================================
 
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="token",
-    scopes=OAUTH2_SCOPES
+    tokenUrl="/token",
+    scopes=OAUTH2_SCOPES,
 )
 
 
@@ -54,7 +60,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 def create_access_token(
     data: dict,
-    expires_delta: timedelta | None = None
+    expires_delta: timedelta | None = None,
 ) -> str:
     """
     Tạo JWT Access Token.
@@ -65,21 +71,21 @@ def create_access_token(
 
     to_encode = data.copy()
 
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+    expire = datetime.now(timezone.utc) + (
+        expires_delta
+        if expires_delta
+        else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
 
     to_encode.update({
-        "exp": expire
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
     })
 
     encoded_jwt = jwt.encode(
         to_encode,
         SECRET_KEY,
-        algorithm=ALGORITHM
+        algorithm=ALGORITHM,
     )
 
     return encoded_jwt
@@ -101,10 +107,24 @@ def decode_access_token(token: str):
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            options={
+                "require": ["exp", "iat", "sub"],
+            },
         )
+
+        username = payload.get("sub")
+        scopes = payload.get("scopes", [])
+
+        if (
+            not isinstance(username, str)
+            or not username.strip()
+            or not isinstance(scopes, list)
+            or not all(isinstance(scope, str) for scope in scopes)
+        ):
+            return None
 
         return payload
 
-    except InvalidTokenError:
+    except (InvalidTokenError, TypeError, ValueError):
         return None

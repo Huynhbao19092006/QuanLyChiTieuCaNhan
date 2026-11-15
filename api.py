@@ -17,6 +17,7 @@ from fastapi.security import (
 )
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from database import engine, create_db_and_tables
@@ -47,9 +48,6 @@ app = FastAPI(
     version="3.0.0",
 )
 
-# Tạo bảng database nếu chưa tồn tại
-create_db_and_tables()
-
 
 # =====================================================
 # 2. KẾT NỐI DATABASE
@@ -58,6 +56,12 @@ create_db_and_tables()
 def get_db():
     with Session(engine) as session:
         yield session
+
+
+# Tạo bảng database nếu chưa tồn tại
+@app.on_event("startup")
+def startup_event():
+    create_db_and_tables()
 
 
 # =====================================================
@@ -952,7 +956,7 @@ def get_statistics(
 
 
 # =====================================================
-# 23. KIỂM TRA API
+# 23. KIỂM TRA API VÀ DATABASE
 # =====================================================
 
 @app.get("/", tags=["system"])
@@ -966,7 +970,17 @@ def home():
 
 @app.get("/health", tags=["system"])
 def health_check():
-    return {
-        "status": "healthy",
-        "database": "configured",
-    }
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+        return {
+            "status": "healthy",
+            "database": "connected",
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection failed.",
+        )
