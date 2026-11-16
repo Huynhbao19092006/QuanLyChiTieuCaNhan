@@ -220,21 +220,51 @@ def parse_api_date(value):
         return date.fromisoformat(value[:10])
 
 
+def normalize_transaction_type(value):
+    """Chuẩn hóa loại giao dịch/danh mục về income hoặc expense."""
+    normalized = str(value).strip().casefold()
+    aliases = {
+        "income": "income",
+        "thu nhập": "income",
+        "thu nhap": "income",
+        "expense": "expense",
+        "chi tiêu": "expense",
+        "chi tieu": "expense",
+    }
+    return aliases.get(normalized)
+
+
 def convert_category(item):
     """Chuyển dữ liệu danh mục API thành object."""
+    category_type = normalize_transaction_type(
+        item["category_type"]
+    )
+    if category_type is None:
+        raise ValueError(
+            f"Loại danh mục không hợp lệ: {item['category_type']}"
+        )
+
     return SimpleNamespace(
         id=int(item["id"]),
         name=str(item["name"]),
-        category_type=str(item["category_type"]),
+        category_type=category_type,
     )
 
 
 def convert_transaction(item):
     """Chuyển dữ liệu giao dịch API thành object."""
+    transaction_type = normalize_transaction_type(
+        item["transaction_type"]
+    )
+    if transaction_type is None:
+        raise ValueError(
+            f"Loại giao dịch không hợp lệ: {item['transaction_type']}"
+        )
+
     return SimpleNamespace(
         id=int(item["id"]),
         category_id=int(item["category_id"]),
-        transaction_type=str(item["transaction_type"]),
+        transaction_type=transaction_type,
         amount=Decimal(str(item["amount"])),
         description=item.get("description") or "",
         transaction_date=parse_api_date(item["transaction_date"]),
@@ -297,6 +327,16 @@ def load_data():
 
     st.session_state["transactions"] = transactions
     st.session_state["categories"] = categories
+    st.session_state["category_counts"] = {
+        "income": sum(
+            item.category_type == "income"
+            for item in categories
+        ),
+        "expense": sum(
+            item.category_type == "expense"
+            for item in categories
+        ),
+    }
     st.session_state["transaction_load_error"] = transaction_error
     st.session_state["category_load_error"] = category_error
 
@@ -317,6 +357,27 @@ def category_name(category_id, categories):
     return "Không xác định"
 
 
+def category_label(category):
+    """Nhãn hiển thị có ID để phân biệt danh mục trùng tên."""
+    category_type_label = (
+        "Thu nhập"
+        if category.category_type == "income"
+        else "Chi tiêu"
+    )
+    return (
+        f"{category.name} · {category_type_label} "
+        f"(#{category.id})"
+    )
+
+
+def category_lookup_by_id_and_type(categories):
+    """Lập ánh xạ danh mục theo cả ID và loại."""
+    return {
+        (category.id, category.category_type): category
+        for category in categories
+    }
+
+
 def get_category_options(categories, transaction_type=None):
     """Lọc danh mục theo loại giao dịch."""
     if transaction_type is None:
@@ -325,7 +386,21 @@ def get_category_options(categories, transaction_type=None):
     return [
         category
         for category in categories
-        if category.category_type == transaction_type
+        if normalize_transaction_type(category.category_type)
+        == transaction_type
+    ]
+
+
+def filter_transactions_by_type(transactions, transaction_type):
+    """Lọc giao dịch theo loại chuẩn hóa từ API."""
+    if transaction_type not in ("income", "expense"):
+        raise ValueError("Loại giao dịch không hợp lệ.")
+
+    return [
+        item
+        for item in transactions
+        if normalize_transaction_type(item.transaction_type)
+        == transaction_type
     ]
 
 
@@ -758,12 +833,13 @@ def show_transactions(transaction_type=None):
     if transaction_type not in (None, "income", "expense"):
         raise ValueError("Loại giao dịch không hợp lệ.")
 
-    is_filtered_page = transaction_type is not None
+    page_transaction_type = transaction_type
+    is_filtered_page = page_transaction_type is not None
     page_label = (
         "Thu nhập"
-        if transaction_type == "income"
+        if page_transaction_type == "income"
         else "Chi tiêu"
-        if transaction_type == "expense"
+        if page_transaction_type == "expense"
         else "Giao dịch"
     )
     show_page_title(
@@ -777,11 +853,10 @@ def show_transactions(transaction_type=None):
 
     transactions, categories = load_data()
     if is_filtered_page:
-        transactions = [
-            item
-            for item in transactions
-            if item.transaction_type == transaction_type
-        ]
+        transactions = filter_transactions_by_type(
+            transactions,
+            page_transaction_type,
+        )
 
         total_amount = sum(
             item.amount
@@ -791,13 +866,21 @@ def show_transactions(transaction_type=None):
             f"Tổng {page_label.lower()}",
             format_money(total_amount),
         )
+        category_count = st.session_state.get(
+            "category_counts",
+            {},
+        ).get(page_transaction_type, 0)
+        st.caption(
+            f"Danh mục {page_label.lower()} từ API: "
+            f"{category_count} bản ghi."
+        )
 
     tab_add, tab_list, tab_import = st.tabs([
         (
             "➕ Thêm thu nhập"
-            if transaction_type == "income"
+            if page_transaction_type == "income"
             else "➕ Thêm chi tiêu"
-            if transaction_type == "expense"
+            if page_transaction_type == "expense"
             else "➕ Thêm giao dịch"
         ),
         "📋 Danh sách giao dịch",
@@ -811,25 +894,26 @@ def show_transactions(transaction_type=None):
             "category_load_error"
         )
 
-        with st.form(
-            f"add_{transaction_type or 'all'}_transaction_form"
-        ):
-            selected_transaction_type = transaction_type
-            if not is_filtered_page:
-                selected_transaction_type = st.selectbox(
-                    "Loại giao dịch",
-                    ["expense", "income"],
-                    format_func=lambda value: (
-                        "Chi tiêu" if value == "expense" else "Thu nhập"
-                    ),
-                )
+        selected_transaction_type = page_transaction_type
+        if not is_filtered_page:
+            selected_transaction_type = st.selectbox(
+                "Loại giao dịch",
+                ["expense", "income"],
+                format_func=lambda value: (
+                    "Chi tiêu" if value == "expense" else "Thu nhập"
+                ),
+                key="all_add_transaction_type",
+            )
 
+        with st.form(
+            f"add_{page_transaction_type or 'all'}_transaction_form"
+        ):
             available_categories = get_category_options(
                 categories,
                 selected_transaction_type,
             )
             category_map = {
-                item.name: item.id
+                category_label(item): item
                 for item in available_categories
             }
 
@@ -841,17 +925,34 @@ def show_transactions(transaction_type=None):
                     "Danh mục",
                     list(category_map.keys()),
                     key=(
-                        f"{transaction_type}_add_category"
+                        f"add_category_{selected_transaction_type}"
                         if is_filtered_page
-                        else "all_add_category"
+                        else f"all_add_category_{selected_transaction_type}"
                     ),
                 )
             else:
                 selected_category = None
-                st.warning(
-                    "Bạn chưa có danh mục phù hợp. "
-                    "Hãy tạo danh mục trước."
-                )
+                if is_filtered_page:
+                    category_count = st.session_state.get(
+                        "category_counts",
+                        {},
+                    ).get(page_transaction_type, 0)
+                    if categories and category_count == 0:
+                        st.error(
+                            "API đã tải danh mục nhưng không có danh mục "
+                            f"loại {page_label.lower()}."
+                        )
+                    else:
+                        st.warning(
+                            "Chưa có danh mục "
+                            f"{page_label.lower()} phù hợp. "
+                            "Hãy tạo danh mục trước."
+                        )
+                else:
+                    st.warning(
+                        "Bạn chưa có danh mục phù hợp. "
+                        "Hãy tạo danh mục trước."
+                    )
 
             amount = st.number_input(
                 "Số tiền (VNĐ)",
@@ -887,7 +988,18 @@ def show_transactions(transaction_type=None):
                     st.error("Số tiền phải lớn hơn 0.")
                 else:
                     try:
-                        category_id = category_map[selected_category]
+                        selected_category_item = category_map[
+                            selected_category
+                        ]
+                        if (
+                            selected_category_item.category_type
+                            != selected_transaction_type
+                        ):
+                            raise ValueError(
+                                "Danh mục không phù hợp với loại giao dịch."
+                            )
+
+                        category_id = selected_category_item.id
                         success, result = create_transaction_api(
                             category_id=category_id,
                             transaction_type=selected_transaction_type,
@@ -914,7 +1026,7 @@ def show_transactions(transaction_type=None):
         search_text = st.text_input(
             "Tìm kiếm theo mô tả hoặc danh mục",
             placeholder="Nhập nội dung cần tìm...",
-            key=f"{transaction_type or 'all'}_transaction_search",
+            key=f"{page_transaction_type or 'all'}_transaction_search",
         )
         if not is_filtered_page:
             filter_type = st.selectbox(
@@ -925,18 +1037,40 @@ def show_transactions(transaction_type=None):
         else:
             filter_type = (
                 "Thu nhập"
-                if transaction_type == "income"
+                if page_transaction_type == "income"
                 else "Chi tiêu"
             )
 
-        category_filter_options = ["Tất cả"] + sorted({
-            category_name(item.category_id, categories)
-            for item in transactions
-        })
+        category_filter_categories = [
+            category
+            for category in categories
+            if (
+                not is_filtered_page
+                or category.category_type == page_transaction_type
+            )
+            and any(
+                item.category_id == category.id
+                and (
+                    not is_filtered_page
+                    or item.transaction_type == page_transaction_type
+                )
+                for item in transactions
+            )
+        ]
+        category_filter_map = {
+            category_label(category): (
+                category.id,
+                category.category_type,
+            )
+            for category in category_filter_categories
+        }
+        category_filter_options = ["Tất cả"] + sorted(
+            category_filter_map.keys()
+        )
         selected_category_filter = st.selectbox(
             "Lọc theo danh mục",
             category_filter_options,
-            key=f"{transaction_type or 'all'}_category_filter",
+            key=f"{page_transaction_type or 'all'}_category_filter",
         )
 
         filter_start_date = None
@@ -955,7 +1089,7 @@ def show_transactions(transaction_type=None):
                     value=min_transaction_date,
                     min_value=min_transaction_date,
                     max_value=max_transaction_date,
-                    key=f"{transaction_type or 'all'}_start_date",
+                    key=f"{page_transaction_type or 'all'}_start_date",
                 )
             with date_col2:
                 filter_end_date = st.date_input(
@@ -963,28 +1097,43 @@ def show_transactions(transaction_type=None):
                     value=max_transaction_date,
                     min_value=min_transaction_date,
                     max_value=max_transaction_date,
-                    key=f"{transaction_type or 'all'}_end_date",
+                    key=f"{page_transaction_type or 'all'}_end_date",
                 )
 
-        filtered = list(transactions)
+        filtered = [
+            item
+            for item in (
+                filter_transactions_by_type(
+                    transactions,
+                    page_transaction_type,
+                )
+                if is_filtered_page
+                else transactions
+            )
+        ]
 
-        if filter_type == "Thu nhập":
+        if not is_filtered_page and filter_type == "Thu nhập":
             filtered = [
                 item for item in filtered
                 if item.transaction_type == "income"
             ]
-        elif filter_type == "Chi tiêu":
+        elif not is_filtered_page and filter_type == "Chi tiêu":
             filtered = [
                 item for item in filtered
                 if item.transaction_type == "expense"
             ]
 
         if selected_category_filter != "Tất cả":
+            selected_category_key = category_filter_map[
+                selected_category_filter
+            ]
             filtered = [
                 item
                 for item in filtered
-                if category_name(item.category_id, categories)
-                == selected_category_filter
+                if (
+                    item.category_id,
+                    item.transaction_type,
+                ) == selected_category_key
             ]
 
         if filter_start_date and filter_end_date:
@@ -1037,12 +1186,16 @@ def show_transactions(transaction_type=None):
             selected_label = st.selectbox(
                 "Chọn giao dịch",
                 list(transaction_map.keys()),
+                key=f"{page_transaction_type or 'all'}_transaction_select",
             )
             selected_transaction = transaction_map[selected_label]
 
             edit_categories = get_category_options(
                 categories,
                 selected_transaction.transaction_type,
+            )
+            edit_transaction_type = normalize_transaction_type(
+                selected_transaction.transaction_type
             )
 
             if not edit_categories:
@@ -1051,21 +1204,33 @@ def show_transactions(transaction_type=None):
                 )
             else:
                 with st.form(
-                    f"edit_{transaction_type or 'all'}_transaction_form"
+                    (
+                        f"edit_{page_transaction_type or 'all'}_"
+                        f"transaction_{selected_transaction.id}_"
+                        f"{edit_transaction_type}_form"
+                    )
                 ):
                     category_labels = {
-                        item.name: item.id
+                        category_label(item): item
                         for item in edit_categories
                     }
-                    current_category = category_name(
+                    current_category_key = (
                         selected_transaction.category_id,
-                        categories,
+                        selected_transaction.transaction_type,
+                    )
+                    category_by_id_and_type = (
+                        category_lookup_by_id_and_type(edit_categories)
+                    )
+                    current_category = category_by_id_and_type.get(
+                        current_category_key
                     )
                     category_names = list(category_labels.keys())
 
                     default_index = (
-                        category_names.index(current_category)
-                        if current_category in category_names
+                        category_names.index(category_label(current_category))
+                        if current_category is not None
+                        and category_label(current_category)
+                        in category_names
                         else 0
                     )
 
@@ -1073,7 +1238,10 @@ def show_transactions(transaction_type=None):
                         "Danh mục",
                         category_names,
                         index=default_index,
-                        key=f"{transaction_type or 'all'}_edit_category",
+                        key=(
+                            f"edit_category_{selected_transaction.id}_"
+                            f"{edit_transaction_type}"
+                        ),
                     )
                     new_amount = st.number_input(
                         "Số tiền",
@@ -1090,7 +1258,10 @@ def show_transactions(transaction_type=None):
                     new_date = st.date_input(
                         "Ngày giao dịch",
                         value=selected_transaction.transaction_date,
-                        key=f"{transaction_type or 'all'}_edit_date",
+                        key=(
+                            f"edit_date_{selected_transaction.id}_"
+                            f"{edit_transaction_type}"
+                        ),
                     )
                     save_edit = st.form_submit_button(
                         "Lưu thay đổi",
@@ -1099,11 +1270,23 @@ def show_transactions(transaction_type=None):
 
                     if save_edit:
                         try:
+                            selected_edit_category = category_labels[
+                                new_category
+                            ]
+                            if (
+                                selected_edit_category.category_type
+                                != edit_transaction_type
+                            ):
+                                raise ValueError(
+                                    "Danh mục không phù hợp với loại "
+                                    "giao dịch đang sửa."
+                                )
+
                             success, result = update_transaction_api(
                                 transaction_id=selected_transaction.id,
-                                category_id=category_labels[new_category],
+                                category_id=selected_edit_category.id,
                                 transaction_type=(
-                                    selected_transaction.transaction_type
+                                    edit_transaction_type
                                 ),
                                 amount=parse_amount(new_amount),
                                 description=new_description.strip(),
@@ -1126,7 +1309,10 @@ def show_transactions(transaction_type=None):
             st.divider()
             confirm_delete = st.checkbox(
                 "Tôi xác nhận muốn xóa giao dịch đã chọn.",
-                key="confirm_delete_transaction",
+                key=(
+                    f"{page_transaction_type or 'all'}"
+                    "_confirm_delete_transaction"
+                ),
             )
 
             if st.button(
@@ -1166,7 +1352,7 @@ def show_transactions(transaction_type=None):
         uploaded_file = st.file_uploader(
             "Chọn file CSV",
             type=["csv"],
-            key=f"{transaction_type or 'all'}_transaction_csv_upload",
+            key=f"{page_transaction_type or 'all'}_transaction_csv_upload",
         )
 
         if uploaded_file is not None:
@@ -1204,7 +1390,7 @@ def show_transactions(transaction_type=None):
                     if st.button(
                         "Tiến hành nhập dữ liệu",
                         type="primary",
-                        key=f"{transaction_type or 'all'}_import_csv_button",
+                        key=f"{page_transaction_type or 'all'}_import_csv_button",
                     ):
                         success_count = 0
                         error_count = 0
@@ -1217,6 +1403,9 @@ def show_transactions(transaction_type=None):
                             ): item.id
                             for item in categories
                         }
+                        category_id_lookup = (
+                            category_lookup_by_id_and_type(categories)
+                        )
 
                         for index, row in imported_df.iterrows():
                             try:
@@ -1236,20 +1425,37 @@ def show_transactions(transaction_type=None):
                                 if (
                                     is_filtered_page
                                     and row_transaction_type
-                                    != transaction_type
+                                    != page_transaction_type
                                 ):
                                     raise ValueError(
                                         "Dòng dữ liệu không thuộc trang "
                                         f"{page_label.lower()}."
                                     )
 
-                                category_key = (
-                                    str(row["Danh mục"]).strip().casefold(),
-                                    row_transaction_type,
-                                )
-                                category_id = category_lookup.get(
-                                    category_key
-                                )
+                                raw_category_id = row.get("Danh mục ID")
+                                if (
+                                    raw_category_id is not None
+                                    and not pd.isna(raw_category_id)
+                                ):
+                                    category_id = int(raw_category_id)
+                                    if (
+                                        category_id,
+                                        row_transaction_type,
+                                    ) not in category_id_lookup:
+                                        raise ValueError(
+                                            "ID danh mục không phù hợp "
+                                            "với loại giao dịch."
+                                        )
+                                else:
+                                    category_key = (
+                                        str(row["Danh mục"])
+                                        .strip()
+                                        .casefold(),
+                                        row_transaction_type,
+                                    )
+                                    category_id = category_lookup.get(
+                                        category_key
+                                    )
 
                                 if category_id is None:
                                     raise ValueError(
@@ -1351,9 +1557,12 @@ def show_categories():
         "Phân loại các khoản thu nhập và chi tiêu.",
     )
 
-    categories = load_data()[1]
+    transactions, categories = load_data()
     category_load_error = st.session_state.get(
         "category_load_error"
+    )
+    transaction_load_error = st.session_state.get(
+        "transaction_load_error"
     )
     category_map = {
         (
@@ -1418,23 +1627,35 @@ def show_categories():
         if category_load_error:
             st.error(category_load_error)
         elif categories:
-            category_df = pd.DataFrame([
-                {
-                    "ID": item.id,
-                    "Tên danh mục": item.name,
-                    "Loại": (
-                        "Thu nhập"
-                        if item.category_type == "income"
-                        else "Chi tiêu"
-                    ),
-                }
-                for item in categories
-            ])
-            st.dataframe(
-                category_df,
-                width="stretch",
-                hide_index=True,
-            )
+            for category_type, title in (
+                ("income", "Danh mục Thu nhập"),
+                ("expense", "Danh mục Chi tiêu"),
+            ):
+                grouped_categories = [
+                    item
+                    for item in categories
+                    if item.category_type == category_type
+                ]
+                st.subheader(title)
+                if grouped_categories:
+                    category_df = pd.DataFrame([
+                        {
+                            "ID": item.id,
+                            "Tên danh mục": item.name,
+                            "Loại": title.replace(
+                                "Danh mục ",
+                                "",
+                            ),
+                        }
+                        for item in grouped_categories
+                    ])
+                    st.dataframe(
+                        category_df,
+                        width="stretch",
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Chưa có danh mục thuộc nhóm này.")
 
             st.divider()
             st.subheader("Chỉnh sửa danh mục")
@@ -1473,6 +1694,25 @@ def show_categories():
                 if save_category:
                     if not edited_name.strip():
                         st.error("Vui lòng nhập tên danh mục.")
+                    elif (
+                        edited_type != selected_edit_category.category_type
+                        and transaction_load_error
+                    ):
+                        st.error(
+                            "Không thể đổi loại danh mục khi chưa tải "
+                            "được các giao dịch liên quan."
+                        )
+                    elif (
+                        edited_type != selected_edit_category.category_type
+                        and any(
+                            item.category_id == selected_edit_category.id
+                            for item in transactions
+                        )
+                    ):
+                        st.error(
+                            "Không thể đổi loại danh mục đang được "
+                            "giao dịch sử dụng."
+                        )
                     else:
                         try:
                             success, result = update_category_api(

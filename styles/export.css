@@ -6,9 +6,9 @@
 .stDownloadButton > button {
     background: var(--surface);
     border: 1px solid var(--primary);
-    color: var(--primary-dark) !important;
+    color: var(--primary) !important;
 }
 
 .stDownloadButton > button:hover {
-    background: var(--primary-soft);
+    background: #134e4a;
 }

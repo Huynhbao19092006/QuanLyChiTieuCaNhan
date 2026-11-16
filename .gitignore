@@ -18,3 +18,8 @@ data/
 
 .vscode/
 .idea/
+
+.env
+.secret_key
+*.db
+data/

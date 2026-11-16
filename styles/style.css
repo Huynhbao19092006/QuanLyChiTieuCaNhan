@@ -1,17 +1,18 @@
 :root {
-    --primary: #087f8c;
-    --primary-dark: #066570;
-    --primary-soft: #dff4f2;
-    --background: #f5f7fb;
-    --surface: #ffffff;
-    --text: #1e293b;
-    --heading: #172b45;
-    --muted: #64748b;
-    --border: #d9e1ec;
-    --success: #15966b;
-    --danger: #df6868;
-    --warning: #c47b16;
-    --shadow: 0 8px 24px rgba(31, 48, 73, .07);
+    --primary: #14b8a6;
+    --primary-dark: #0f766e;
+    --primary-soft: #134e4a;
+    --background: #0b1120;
+    --surface: #1e293b;
+    --input-surface: #0f172a;
+    --text: #f1f5f9;
+    --heading: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #334155;
+    --success: #34d399;
+    --danger: #fb7185;
+    --warning: #fbbf24;
+    --shadow: 0 8px 24px rgba(2, 6, 23, .3);
 }
 
 html,
@@ -51,7 +52,7 @@ h5 {
 }
 
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0d3d49 0%, #087f8c 100%);
+    background: #111827;
     border-right: 0;
     box-shadow: 8px 0 24px rgba(8, 127, 140, .12);
 }
@@ -80,8 +81,8 @@ section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
 section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(
     input:checked
 ) {
-    background: #ffffff;
-    color: var(--primary-dark) !important;
+    background: var(--primary);
+    color: #042f2e !important;
     box-shadow: 0 6px 16px rgba(3, 45, 54, .16);
 }
 
@@ -153,9 +154,9 @@ section[data-testid="stSidebar"] .stButton button:hover {
 .stNumberInput input,
 .stDateInput input,
 .stTextArea textarea {
-    background: var(--surface) !important;
+    background: var(--input-surface) !important;
     color: var(--heading) !important;
-    border: 1px solid #b8c5d6 !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     -webkit-text-fill-color: var(--heading) !important;
 }
@@ -170,13 +171,13 @@ section[data-testid="stSidebar"] .stButton button:hover {
 
 .stTextInput input::placeholder,
 .stTextArea textarea::placeholder {
-    color: #68788c !important;
+    color: var(--muted) !important;
     opacity: 1;
 }
 
 .stSelectbox div[data-baseweb="select"],
 .stMultiSelect div[data-baseweb="select"] {
-    background: var(--surface) !important;
+    background: var(--input-surface) !important;
     color: var(--heading) !important;
 }
 
@@ -198,7 +199,7 @@ div[data-testid="stDataFrame"] {
 }
 
 .stTabs [data-baseweb="tab"] {
-    color: #334155 !important;
+    color: var(--muted) !important;
     font-weight: 600;
 }
 
@@ -207,7 +208,7 @@ div[data-testid="stDataFrame"] {
 }
 
 [data-testid="stMetricLabel"] {
-    color: #526174 !important;
+    color: var(--muted) !important;
 }
 
 [data-testid="stMetricValue"] {

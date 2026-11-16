@@ -203,6 +203,33 @@ def get_current_user():
     return result if success else None
 
 
+def update_profile_api(email):
+    email = email.strip().lower()
+
+    if not email:
+        return False, "Email không được để trống."
+
+    return _request(
+        "PUT",
+        "/users/me",
+        json={"email": email},
+    )
+
+
+def change_password_api(current_password, new_password):
+    if not current_password or not new_password:
+        return False, "Vui lòng nhập đầy đủ mật khẩu."
+
+    return _request(
+        "POST",
+        "/users/me/change-password",
+        json={
+            "current_password": current_password,
+            "new_password": new_password,
+        },
+    )
+
+
 # =====================================================
 # 4. QUẢN LÝ DANH MỤC
 # =====================================================
@@ -232,6 +259,25 @@ def create_category_api(name, category_type):
             "name": name,
             "category_type": category_type
         }
+    )
+
+
+def update_category_api(category_id, name, category_type):
+    name = name.strip()
+
+    if not name:
+        return False, "Tên danh mục không được để trống."
+
+    if category_type not in ("income", "expense"):
+        return False, "Loại danh mục không hợp lệ."
+
+    return _request(
+        "PUT",
+        f"/categories/{int(category_id)}",
+        json={
+            "name": name,
+            "category_type": category_type,
+        },
     )
 
 

@@ -23,10 +23,10 @@
 .metric-card {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(145deg, #ffffff, #f3fbfb);
+    background: linear-gradient(145deg, #1e293b, #134e4a);
     padding: 25px;
     border-radius: 20px;
-    border: 1px solid #cde7e6;
+    border: 1px solid var(--border);
     box-shadow: 0 12px 28px rgba(31, 48, 73, .09);
     min-height: 140px;
     transition: transform .2s ease, box-shadow .2s ease;
@@ -54,7 +54,7 @@
 }
 
 .metric-label {
-    color: #526174 !important;
+    color: var(--muted) !important;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: .5px;
@@ -88,7 +88,7 @@ div[data-testid="stVegaLiteChart"],
 div[data-testid="stArrowVegaLiteChart"] {
     border-radius: 16px;
     border: 1px solid var(--border);
-    background: #ffffff;
+    background: var(--surface);
     box-shadow: var(--shadow);
 }
 

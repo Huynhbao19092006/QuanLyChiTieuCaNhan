@@ -11,10 +11,10 @@
 }
 
 [data-testid="stFileUploader"] {
-    border: 1px dashed #9fb4ca;
+    border: 1px dashed var(--border);
     border-radius: 12px;
     padding: 8px;
-    background: #f8fbfd;
+    background: var(--surface);
 }
 
 [data-testid="stExpander"] {
