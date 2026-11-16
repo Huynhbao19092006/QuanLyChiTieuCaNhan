@@ -5,7 +5,6 @@ import streamlit as st
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Optional
 from dotenv import load_dotenv
 
 # =====================================================
@@ -19,7 +18,9 @@ API_BASE_URL = os.getenv(
     "http://127.0.0.1:8000"
 ).strip().rstrip("/")
 
-API_TIMEOUT = 15
+# Render Free có thể mất 50 giây hoặc hơn để khởi động.
+# 15 giây trước đây có thể khiến yêu cầu đăng nhập bị timeout.
+API_TIMEOUT = (15, 90)
 
 
 # =====================================================
@@ -31,13 +32,14 @@ def get_headers():
 
     token = st.session_state.get("access_token")
 
-    if not token:
-        return {}
-
-    return {
-        "Authorization": f"Bearer {token}",
+    headers = {
         "Accept": "application/json"
     }
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    return headers
 
 
 def _handle_response(response):
@@ -45,7 +47,7 @@ def _handle_response(response):
 
     if response.status_code == 401:
         logout()
-        return False, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+        return False, "Tên đăng nhập hoặc mật khẩu không đúng, hoặc phiên đăng nhập đã hết hạn."
 
     try:
         data = response.json()
@@ -56,7 +58,10 @@ def _handle_response(response):
         return True, data
 
     if isinstance(data, dict):
-        detail = data.get("detail", "Đã xảy ra lỗi từ máy chủ.")
+        detail = data.get(
+            "detail",
+            "Đã xảy ra lỗi từ máy chủ."
+        )
     else:
         detail = "Đã xảy ra lỗi từ máy chủ."
 
@@ -78,13 +83,20 @@ def _request(method, endpoint, **kwargs):
         return _handle_response(response)
 
     except requests.Timeout:
-        return False, "Máy chủ phản hồi quá lâu. Vui lòng thử lại."
+        return False, (
+            "Máy chủ phản hồi quá lâu. "
+            "Render có thể đang khởi động lại. "
+            "Vui lòng chờ một chút rồi thử lại."
+        )
 
     except requests.ConnectionError:
-        return False, "Không thể kết nối FastAPI. Hãy kiểm tra máy chủ."
+        return False, (
+            "Không thể kết nối đến máy chủ FastAPI. "
+            "Vui lòng kiểm tra API_BASE_URL và trạng thái Backend."
+        )
 
-    except requests.RequestException:
-        return False, "Có lỗi khi gửi yêu cầu đến máy chủ."
+    except requests.RequestException as e:
+        return False, f"Lỗi gửi yêu cầu đến máy chủ: {str(e)}"
 
 
 # =====================================================
@@ -114,19 +126,28 @@ def register(username, email, password):
 # =====================================================
 
 def login(username, password, scopes=None):
-    if not username.strip() or not password:
+    username = username.strip()
+
+    if not username or not password:
         return False, "Vui lòng nhập tên đăng nhập và mật khẩu."
 
     if scopes is None:
-        scopes = ["me", "categories", "transactions"]
+        scopes = [
+            "me",
+            "categories",
+            "transactions"
+        ]
 
     try:
         response = requests.post(
             f"{API_BASE_URL}/token",
             data={
-                "username": username.strip(),
+                "username": username,
                 "password": password,
                 "scope": " ".join(scopes)
+            },
+            headers={
+                "Accept": "application/json"
             },
             timeout=API_TIMEOUT
         )
@@ -136,26 +157,37 @@ def login(username, password, scopes=None):
         if not success:
             return False, result
 
+        if not isinstance(result, dict):
+            return False, "Dữ liệu đăng nhập từ máy chủ không hợp lệ."
+
         token = result.get("access_token")
 
         if not token:
             return False, "Máy chủ không trả về Access Token."
 
+        # Lưu JWT vào session của Streamlit.
         st.session_state["access_token"] = token
+
         st.session_state["token_type"] = result.get(
-            "token_type", "bearer"
+            "token_type",
+            "bearer"
         )
 
         return True, "Đăng nhập thành công."
 
     except requests.Timeout:
-        return False, "Máy chủ phản hồi quá lâu."
+        return False, (
+            "Máy chủ khởi động hoặc phản hồi quá lâu. "
+            "Vui lòng chờ rồi thử đăng nhập lại."
+        )
 
     except requests.ConnectionError:
-        return False, "Không thể kết nối đến máy chủ FastAPI."
+        return False, (
+            "Không thể kết nối đến máy chủ FastAPI."
+        )
 
-    except requests.RequestException:
-        return False, "Có lỗi xảy ra khi đăng nhập."
+    except requests.RequestException as e:
+        return False, f"Lỗi đăng nhập: {str(e)}"
 
 
 # =====================================================
@@ -163,7 +195,11 @@ def login(username, password, scopes=None):
 # =====================================================
 
 def get_current_user():
-    success, result = _request("GET", "/users/me")
+    success, result = _request(
+        "GET",
+        "/users/me"
+    )
+
     return result if success else None
 
 
@@ -172,7 +208,11 @@ def get_current_user():
 # =====================================================
 
 def get_categories_api():
-    success, result = _request("GET", "/categories")
+    success, result = _request(
+        "GET",
+        "/categories"
+    )
+
     return result if success else None
 
 
@@ -196,7 +236,10 @@ def create_category_api(name, category_type):
 
 
 def delete_category_api(category_id):
-    return _request("DELETE", f"/categories/{int(category_id)}")
+    return _request(
+        "DELETE",
+        f"/categories/{int(category_id)}"
+    )
 
 
 # =====================================================
@@ -204,7 +247,11 @@ def delete_category_api(category_id):
 # =====================================================
 
 def get_transactions_api():
-    success, result = _request("GET", "/transactions")
+    success, result = _request(
+        "GET",
+        "/transactions"
+    )
+
     return result if success else None
 
 
@@ -261,6 +308,7 @@ def update_transaction_api(
     if transaction_type is not None:
         if transaction_type not in ("income", "expense"):
             return False, "Loại giao dịch không hợp lệ."
+
         payload["transaction_type"] = transaction_type
 
     if amount is not None:
@@ -310,4 +358,5 @@ def logout():
     st.session_state.pop("access_token", None)
     st.session_state.pop("token_type", None)
     st.session_state.pop("user", None)
+
     st.session_state["logged_in"] = False
