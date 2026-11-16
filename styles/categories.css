@@ -1,0 +1,15 @@
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 10px 14px;
+}
+
+[data-testid="stDataFrame"] {
+    box-shadow: var(--shadow);
+}
+
+.stCheckbox {
+    margin-top: 8px;
+}

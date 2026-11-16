@@ -1,0 +1,32 @@
+[data-testid="stMetric"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+
+[data-testid="stExpander"] {
+    border-color: var(--border);
+    border-radius: 10px;
+}
+
+.vega-embed {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+div[data-testid="stVegaLiteChart"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 18px;
+}
+
+[data-testid="stProgress"] > div > div {
+    background-color: var(--primary);
+}

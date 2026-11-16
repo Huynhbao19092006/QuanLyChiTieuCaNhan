@@ -1,0 +1,7 @@
+[data-testid="stMetric"] {
+    border-top: 3px solid #15966b;
+}
+
+.stButton > button[kind="primary"] {
+    background: #15966b;
+}

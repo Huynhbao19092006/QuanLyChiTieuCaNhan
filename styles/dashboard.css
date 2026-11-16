@@ -1,0 +1,109 @@
+.dashboard-banner {
+    background: linear-gradient(120deg, #183653, var(--primary));
+    color: #ffffff;
+    padding: 28px;
+    border-radius: 18px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 24px rgba(24, 54, 83, .14);
+}
+
+.stApp [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
+    gap: 1rem;
+}
+
+.dashboard-banner h2 {
+    color: #ffffff !important;
+}
+
+.dashboard-banner p {
+    color: #f0fdfa !important;
+    margin-bottom: 0;
+}
+
+.metric-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(145deg, #ffffff, #f3fbfb);
+    padding: 25px;
+    border-radius: 20px;
+    border: 1px solid #cde7e6;
+    box-shadow: 0 12px 28px rgba(31, 48, 73, .09);
+    min-height: 140px;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.metric-card::after {
+    position: absolute;
+    right: -24px;
+    bottom: -34px;
+    width: 105px;
+    height: 105px;
+    border-radius: 50%;
+    background: rgba(8, 127, 140, .08);
+    content: "";
+}
+
+.metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 30px rgba(31, 48, 73, .13);
+}
+
+.metric-icon {
+    font-size: 24px;
+    margin-bottom: 12px;
+}
+
+.metric-label {
+    color: #526174 !important;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin-bottom: 10px;
+}
+
+.metric-value {
+    color: var(--heading);
+    font-size: 24px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.metric-value--income {
+    color: var(--success);
+}
+
+.metric-value--expense {
+    color: var(--danger);
+}
+
+.metric-value--balance {
+    color: var(--success);
+}
+
+.metric-value--negative {
+    color: var(--danger);
+}
+
+div[data-testid="stVegaLiteChart"],
+div[data-testid="stArrowVegaLiteChart"] {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: #ffffff;
+    box-shadow: var(--shadow);
+}
+
+.dashboard-banner ~ div [data-testid="stDataFrame"] {
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+}
+
+@media (max-width: 768px) {
+    .dashboard-banner {
+        padding: 22px;
+    }
+
+    .metric-card {
+        min-height: 120px;
+        padding: 18px;
+    }
+}

@@ -1,0 +1,14 @@
+[data-testid="stDataFrame"] {
+    box-shadow: var(--shadow);
+    margin-bottom: 8px;
+}
+
+.stDownloadButton > button {
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    color: var(--primary-dark) !important;
+}
+
+.stDownloadButton > button:hover {
+    background: var(--primary-soft);
+}

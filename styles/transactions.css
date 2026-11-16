@@ -1,0 +1,23 @@
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 10px 14px;
+}
+
+[data-testid="stDataFrame"] {
+    box-shadow: var(--shadow);
+}
+
+[data-testid="stFileUploader"] {
+    border: 1px dashed #9fb4ca;
+    border-radius: 12px;
+    padding: 8px;
+    background: #f8fbfd;
+}
+
+[data-testid="stExpander"] {
+    border-color: var(--border);
+    border-radius: 10px;
+}
