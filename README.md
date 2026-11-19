@@ -40,6 +40,7 @@ QuanLyChiTieuCaNhan/
 ├── config.py
 ├── database.py
 ├── main.py
+├── app.py
 ├── models.py
 ├── requirements.txt
 ├── .gitignore
@@ -47,8 +48,39 @@ QuanLyChiTieuCaNhan/
 │
 ├── services/
 │   ├── auth_service.py
+│   ├── budget_service.py
 │   ├── category_service.py
+│   ├── data_service.py
+│   ├── export_service.py
+│   ├── statistics_service.py
 │   └── transaction_service.py
+│
+├── utils/
+│   ├── formatters.py
+│   ├── api_errors.py
+│   ├── page_context.py
+│   ├── session.py
+│   ├── ui_helpers.py
+│   └── validators.py
+│
+├── pages/
+│   ├── auth.py
+│   ├── dashboard.py
+│   ├── transactions.py
+│   ├── categories.py
+│   ├── budget.py
+│   ├── statistics.py
+│   ├── profile.py
+│   └── export.py
+│
+├── components/
+│   ├── sidebar.py
+│   ├── stat_cards.py
+│   ├── charts.py
+│   ├── transaction_table.py
+│   ├── transaction_form.py
+│   ├── category_card.py
+│   └── notifications.py
 │
 ├── styles/
 │   ├── style.css
@@ -67,6 +99,11 @@ QuanLyChiTieuCaNhan/
 │
 └── venv/
 ```
+
+`main.py` là entry point tối giản của Streamlit. `app.py` chỉ khởi tạo session,
+nạp CSS và điều hướng tới các trang. `legacy_ui.py` chỉ còn là marker tương
+thích 7 dòng; toàn bộ mã thực thi đã được chuyển sang `pages/`, `components/`,
+`services/` và `utils/`. Giao diện dùng CSS chung và CSS theo trang.
 
 ## 5. Cài đặt dự án
 

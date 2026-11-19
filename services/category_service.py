@@ -1,99 +1,41 @@
-
-from sqlmodel import Session, select
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-
-from models import Category
+from utils.validators import normalize_transaction_type
 
 
-def normalize_name(name: str):
-    return " ".join((name or "").split())
+def category_name(category_id, categories):
+    """Tìm tên danh mục theo ID."""
+    for category in categories:
+        if category.id == category_id:
+            return category.name
 
+    return "Không xác định"
 
-def get_categories(session: Session, user_id: int):
-    statement = (
-        select(Category)
-        .where(Category.user_id == user_id)
-        .order_by(Category.name)
+def category_label(category):
+    """Nhãn hiển thị có ID để phân biệt danh mục trùng tên."""
+    category_type_label = (
+        "Thu nhập"
+        if category.category_type == "income"
+        else "Chi tiêu"
+    )
+    return (
+        f"{category.name} · {category_type_label} "
+        f"(#{category.id})"
     )
 
-    return session.exec(statement).all()
+def category_lookup_by_id_and_type(categories):
+    """Lập ánh xạ danh mục theo cả ID và loại."""
+    return {
+        (category.id, category.category_type): category
+        for category in categories
+    }
 
+def get_category_options(categories, transaction_type=None):
+    """Lọc danh mục theo loại giao dịch."""
+    if transaction_type is None:
+        return categories
 
-def add_category(
-    session: Session,
-    user_id: int,
-    name: str,
-    category_type: str
-):
-    name = normalize_name(name)
-
-    if not name:
-        return False, "Vui lòng nhập tên danh mục."
-
-    if len(name) > 100:
-        return False, "Tên danh mục không được vượt quá 100 ký tự."
-
-    if category_type not in ["income", "expense"]:
-        return False, "Loại danh mục không hợp lệ."
-
-    try:
-        existing = session.exec(
-            select(Category).where(
-                Category.user_id == user_id,
-                Category.name.ilike(name),
-                Category.category_type == category_type
-            )
-        ).first()
-
-        if existing:
-            return False, "Danh mục đã tồn tại."
-
-        category = Category(
-            user_id=user_id,
-            name=name,
-            category_type=category_type
-        )
-
-        session.add(category)
-        session.commit()
-        session.refresh(category)
-
-        return True, "Thêm danh mục thành công!"
-
-    except IntegrityError:
-        session.rollback()
-        return False, "Danh mục đã tồn tại."
-
-    except SQLAlchemyError:
-        session.rollback()
-        return False, "Không thể thêm danh mục. Vui lòng thử lại."
-
-
-def delete_category(
-    session: Session,
-    user_id: int,
-    category_id: int
-):
-    try:
-        category = session.exec(
-            select(Category).where(
-                Category.id == category_id,
-                Category.user_id == user_id
-            )
-        ).first()
-
-        if category is None:
-            return False, "Không tìm thấy danh mục."
-
-        session.delete(category)
-        session.commit()
-
-        return True, "Xóa danh mục thành công!"
-
-    except IntegrityError:
-        session.rollback()
-        return False, "Không thể xóa danh mục vì đang có giao dịch sử dụng."
-
-    except SQLAlchemyError:
-        session.rollback()
-        return False, "Không thể xóa danh mục. Vui lòng thử lại."
+    return [
+        category
+        for category in categories
+        if normalize_transaction_type(category.category_type)
+        == transaction_type
+    ]
